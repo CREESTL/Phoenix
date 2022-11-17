@@ -6,13 +6,11 @@ require("@nomicfoundation/hardhat-chai-matchers");
 require("solidity-coverage");
 require("hardhat-gas-reporter");
 
-const {
-  ACC_PRIVATE_KEY,
-} = process.env;
+const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
 
 module.exports = {
   solidity: {
-    version: "0.8.9",
+    version: "0.6.12",
     settings: {
       optimizer: {
         enabled: true,
