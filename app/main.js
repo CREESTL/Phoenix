@@ -1,5 +1,6 @@
 const { ethers, network } = require("hardhat");
 const fs = require("fs");
+const parseArgs = require('minimist');
 const path = require("path");
 require("dotenv").config();
 const delay = require("delay");
@@ -21,6 +22,9 @@ const PAIR_ADDRESS = "0x5910306486d3adF0f2ec3146A8C38e6C1F3404b7";
 // The timeout for transactions
 const TIMEOUT = Date.now() + 1000 * 60 * 10;
 
+
+// Parse command line arguments
+let args = parseArgs(process.argv.slice(2));
 
 // Allows to create a queue of promises and resolve them one by one
 class Queue {
@@ -116,7 +120,11 @@ async function showWalletBalance() {
 
 // Compares prices of USDC and USDT tokens in the pool and 
 // swaps one token for another one
-async function comparePricesAndSwap() {
+// If `amount` is not zero, then exactly the `amount` of tokens (USDT or USDC) 
+// will be swapped each time
+// If `amount` is zero, then the whole user's balance of USDT and USDC 
+// will be swapped each time
+async function comparePricesAndSwap(amount) {
 
   await showWalletBalance();
 
@@ -127,38 +135,67 @@ async function comparePricesAndSwap() {
   // Swap USDT -> USDC if USDT is more expensive
   if (await USDTMoreExpensive()) {
     console.log("USDT is more expensive");
-    // Swap is impossible if user has not enough tokens
-    if (await USDT.balanceOf(wallet.address) == 0 ) {
-      console.log("User has not enough USDT to swap!");
-      return;
-    }
     console.log("Swapping: USDT -> USDC");  
-    // Get the user's balance of the tokens he wants to swap
-    let BNAmount = await USDT.balanceOf(wallet.address);
-    // Convert from BigNumber to uint
-    let amount = BNAmount.toNumber();
-    // Approve the transfer of swapped tokens from user to the pool
-    let approveTx = await USDT.connect(wallet).approve(router.address, amount);
-    await approveTx.wait();
-    await swap(USDT.address, USDC.address, amount);
+
+    // User wants to swap an exact amount of tokens
+    if (amount != 0) {
+      // Swap is impossible if user has not enough tokens
+      if (await USDT.balanceOf(wallet.address) == 0 ) {
+        throw "User has not enough USDT to swap!";
+      }
+      // Swap is impossible if user does not have the `amount` of tokens
+      if (await USDT.balanceOf(wallet.address) <= amount ) {
+        throw "User does not have a required amount of tokens to swap!";
+      }
+      // Approve the transfer of swapped tokens from user to the pool
+      let approveTx = await USDT.connect(wallet).approve(router.address, amount);
+      await approveTx.wait();
+      await swap(USDT.address, USDC.address, amount);
+
+    // User wants to swap his whole balance of tokens
+    } else {
+      // Swap is impossible if user has not enough tokens
+      if (await USDT.balanceOf(wallet.address) == 0 ) {
+        throw "User has not enough USDT to swap!";
+      }
+      // Amount is the whole balance of the user
+      let balance = await USDT.balanceOf(wallet.address);
+      let approveTx = await USDT.connect(wallet).approve(router.address, balance);
+      await approveTx.wait();
+      await swap(USDT.address, USDC.address, balance);
+    }
 
   // Swap USDC -> USDT if USDC is more expensive
   } else {
     console.log("USDC is more expensive");
-    // Swap is impossible if user has not enough tokens
-    if (await USDC.balanceOf(wallet.address) == 0 ) {
-      console.log("User has not enough USDC to swap!");
-      return;
-    }
     console.log("Swapping: USDC -> USDT");  
-    // Get the user's balance of the tokens he wants to swap
-    let BNAmount = await USDC.balanceOf(wallet.address);
-    // Convert from BigNumber to uint
-    let amount = BNAmount.toNumber();
-    // Approve the transfer of swapped tokens from user to the pool
-    let approveTx = await USDC.connect(wallet).approve(router.address, amount);
-    await approveTx.wait();
-    await swap(USDC.address, USDT.address, amount);
+    // User wants to swap an exact amount of tokens
+    if (amount != 0) {
+      // Swap is impossible if user has not enough tokens
+      if (await USDC.balanceOf(wallet.address) == 0 ) {
+        throw "User has not enough USDC to swap!";
+      }
+      // Swap is impossible if user does not have the `amount` of tokens
+      if (await USDC.balanceOf(wallet.address) <= amount ) {
+        throw "User does not have a required amount of tokens to swap!";
+      }
+      // Approve the transfer of swapped tokens from user to the pool
+      let approveTx = await USDC.connect(wallet).approve(router.address, amount);
+      await approveTx.wait();
+      await swap(USDC.address, USDT.address, amount);
+
+    // User wants to swap his whole balance of tokens
+    } else {
+      // Swap is impossible if user has not enough tokens
+      if (await USDC.balanceOf(wallet.address) == 0 ) {
+        throw "User has not enough USDC to swap!";
+      }
+      // Amount is the whole balance of the user
+      let balance = await USDC.balanceOf(wallet.address);
+      let approveTx = await USDC.connect(wallet).approve(router.address, balance);
+      await approveTx.wait();
+      await swap(USDC.address, USDT.address, balance);
+    }
   }
 
   console.log("Swap Finished!");
@@ -173,8 +210,7 @@ async function listenAndSwap() {
 
   // Make sure that threshold is not zero
   if (!(SWAP_THRESHOLD > 0)) {
-    console.log("Swap threshold should be a positive integer!");
-    return;
+    throw "Swap threshold should be a positive integer!";
   }
 
   // If the network is not Ultron - get the default provider for the specified network
@@ -207,19 +243,36 @@ async function listenAndSwap() {
 
   console.log("Listening for pool events...");
 
+  let amount = 0;
+  // User provided some amount
+  if (args["amount"] !== undefined) {
+    // Provided amount can't be zero
+    if (args["amount"] >= 0) {
+      amount = args["amount"];
+    } else {
+      throw "Invalid amount to swap!";
+    }
+  }
+
   pair.on("Mint", () => {
     console.log("Liquidity has been added to the pool!");
-    queue.add(async() => {await comparePricesAndSwap()});
+    queue.add(async() => {await comparePricesAndSwap(amount)});
   });
 
   pair.on("Burn", () => {
     console.log("Liquidity has been withdrawn from the pool!");
-    queue.add(async() => {await comparePricesAndSwap()});
+    queue.add(async() => {await comparePricesAndSwap(amount)});
   });
 
-  pair.on("Swap", () => {
-    console.log("Tokens have been swapped inside the pool!");
-    queue.add(async() => {await comparePricesAndSwap()});
+  pair.on("Swap", (sender, a1, a2, a3, a4, to) => {
+    // Check that the one who called swap was not the current user.
+    // Because otherwise if we make another swap here, it will emit
+    // one more "Swap" event, and it will trigger this section of code
+    // and so on... Prevent recursion that way.
+    if (to !== wallet.address) {
+      console.log("Tokens have been swapped inside the pool!");
+      queue.add(async() => {await comparePricesAndSwap(amount)});
+    }
   });
 }
 
