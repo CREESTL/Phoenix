@@ -1,10 +1,19 @@
 const { ethers, network } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const delay = require("delay");
 require("dotenv").config();
 const { formatEther, formatUnits, parseEther, parseUnits} = ethers.utils;
 const { getContractFactory, getContractAt } = ethers;
 
+/**
+ * This test file should be used while running main script on the same network. 
+ * For example:
+ * - npx hardhat node --network hardhat (start a local node of Ultron fork)
+ * - npx hardhat run app/main.js --network localhost (run app on the local node)
+ * - npx hardhat run test/events.js --networl localhost (run this script to trigger events
+ *   in the app)
+ */
 
 const SWAP_THRESHOLD = parseEther(process.env.SWAP_THRESHOLD || "0");
 // The address of main UniswapV2Router02 deployed and used on Ultron mainnet
@@ -16,7 +25,7 @@ const USDC_ADDRESS = "0x3c4e0fded74876295ca36f62da289f69e3929cc4";
 const PAIR_ADDRESS = "0x5910306486d3adF0f2ec3146A8C38e6C1F3404b7";
 
 // Function creates a pair of tokens and adds liquidity to it
-async function main() {
+async function triggerEvents() {
 
   console.log(`\nCurrent chain: ${network.name}`)
   const wallets = await ethers.getSigners();
@@ -31,13 +40,15 @@ async function main() {
   const USDT = await getContractAt("USDX", USDT_ADDRESS, wallet);
   const USDC = await getContractAt("USDX", USDC_ADDRESS, wallet);
   // Initialize the Router contract
-  const router = await getContractAt("IUniswapV2Router02", ROUTER_ADDRESS, wallet);  
+  const router = await getContractAt("UniswapV2Router02", ROUTER_ADDRESS, wallet);  
   // Get the address of WETH (wrapped ETH used to buy USDC & USDT)
   // No need to actually initialize the contract
   const WETH_ADDRESS = await router.WETH();
   // The amount of USDT (USDC) to add as liquidity
   // const amountTokenDesired = parseUnits("20", 6);
   const amountTokenDesired = 20;
+  // The timeout for transactions
+  const TIMEOUT = Date.now() + 1000 * 60 * 10;
 
   // Buy USDC and USDT for ETH
 
@@ -49,11 +60,11 @@ async function main() {
   console.log("Wallet ETH balance before swap is ", formatEther(await wallet.getBalance()));
   console.log("Wallet USDT balance before swap is ", formatUnits(await USDT.balanceOf(wallet.address), 1));
   let path = [WETH_ADDRESS, USDT.address];
-  let txResponse = await router.swapExactETHForTokens(
+  let txResponse = await router.connect(wallet).swapExactETHForTokens(
     amountTokenDesired, // we need to have at least as many tokens as we want to add to the pool
     path,
     wallet.address,
-    Date.now() + 1000 * 60 * 10,
+    TIMEOUT,
     {value: parseEther("1")}, 
   );
   let txReceipt = await txResponse.wait();
@@ -65,11 +76,11 @@ async function main() {
   console.log("Wallet ETH balance before swap is ", formatEther(await wallet.getBalance()));
   console.log("Wallet USDC balance before swap is ", formatUnits(await USDC.balanceOf(wallet.address), 1));
   path = [WETH_ADDRESS, USDC.address];
-  txResponse = await router.swapExactETHForTokens(
+  txResponse = await router.connect(wallet).swapExactETHForTokens(
     amountTokenDesired, // we need to have at least as many tokens as we want to add to the pool
     path,
     wallet.address,
-    Date.now() + 1000 * 60 * 10,
+    TIMEOUT,
     {value: parseEther("1")}, 
   );
   txReceipt = await txResponse.wait();
@@ -83,9 +94,9 @@ async function main() {
   console.log("Add Luquidity to USDC/USDT pool with USDT..");
   console.log("Approving adding liquidity...");
   // We have to approve both USDC and USDT
-  let approveTx = await USDT.approve(router.address, amountTokenDesired);
+  let approveTx = await USDT.connect(wallet).approve(router.address, amountTokenDesired);
   let approveReceipt = await approveTx.wait();
-  approveTx = await USDC.approve(router.address, amountTokenDesired);
+  approveTx = await USDC.connect(wallet).approve(router.address, amountTokenDesired);
   approveReceipt = await approveTx.wait();
   console.log("Approved!");
 
@@ -94,7 +105,7 @@ async function main() {
   console.log(`USDT balance of the pair before adding:`, formatUnits(await USDT.balanceOf(pair.address), 1));
   console.log(`USDC balance of the pair before adding:`, formatUnits(await USDC.balanceOf(pair.address), 1));
 
-  txResponse = await router.addLiquidity (
+  txResponse = await router.connect(wallet).addLiquidity (
     USDT.address,
     USDC.address,
     amountTokenDesired,
@@ -102,7 +113,7 @@ async function main() {
     ethers.utils.parseEther("0"),
     ethers.utils.parseEther("0"),
     wallet.address,
-    Date.now() + 1000 * 60 * 10,
+    TIMEOUT,
   );
 
   txReceipt = await txResponse.wait();
@@ -120,14 +131,14 @@ async function main() {
   console.log(`USDC balance of the pair before swapping:`, formatUnits(await USDC.balanceOf(pair.address), 1));
   path = [USDT.address, USDC.address];
   // We have to approve USDT
-  approveTx = await USDT.approve(router.address, amountTokenDesired);
+  approveTx = await USDT.connect(wallet).approve(router.address, amountTokenDesired);
   approveReceipt = await approveTx.wait();
-  txResponse = await router.swapExactTokensForTokens (
+  txResponse = await router.connect(wallet).swapExactTokensForTokens (
     amountTokenDesired,
     1, // at least 1 USDC should return
     path, 
     wallet.address,
-    Date.now() + 1000 * 60 * 10,
+    TIMEOUT,
   );
 
   txReceipt = await txResponse.wait();
@@ -141,20 +152,28 @@ async function main() {
   console.log("Remove liquidity from the pool");
   console.log(`USDT balance of the pair before liquidity withdrawal:`, formatUnits(await USDT.balanceOf(pair.address), 1));
   console.log(`USDC balance of the pair before liquidity withdrawal:`, formatUnits(await USDC.balanceOf(pair.address), 1));
+  console.log(`USDC balance of the wallet before liquidity withdrawal:`, formatUnits(await USDC.balanceOf(wallet.address), 1));
   console.log(`LP tokens balance of the user before liquidity withdrawal`, formatUnits(await pair.balanceOf(wallet.address), 1));
 
   liquidity = await pair.balanceOf(wallet.address);
   // Approve transfer of LP tokens from wallet back to the contract
   approveTx = await pair.approve(router.address, liquidity);
   approveReceipt = await approveTx.wait();
-  txResponse = await router.removeLiquidity (
+  // TODO before remove LPs
+  // Wallet's USDT balance: 126678
+  // Wallet's USDC balance: 0
+  // after
+  // Wallet's USDT balance: 126677
+  // Wallet's USDC balance: 37
+  // understand why and fix that
+  txResponse = await router.connect(wallet).removeLiquidity (
     USDT.address,
     USDC.address,
     liquidity,
     1, // at least 1 USDT and 1 USDC should be collected
     1,
     wallet.address,
-    Date.now() + 1000 * 60 * 10,
+    TIMEOUT,
   );
 
   txReceipt = await txResponse.wait();
@@ -163,9 +182,10 @@ async function main() {
 
   console.log(`USDT balance of the pair after liquidity withdrawal:`, formatUnits(await USDT.balanceOf(pair.address), 1));
   console.log(`USDC balance of the pair after liquidity withdrawal:`, formatUnits(await USDC.balanceOf(pair.address), 1));
+  console.log(`USDC balance of the wallet after liquidity withdrawal:`, formatUnits(await USDC.balanceOf(wallet.address), 1));
   console.log(`LP tokens balance of the user after liquidity withdrawal`, formatUnits(await pair.balanceOf(wallet.address), 1));
 
 }
 
 
-main();
+triggerEvents();
