@@ -30,11 +30,6 @@ module.exports = {
     localhost: {
       url: "http://127.0.0.1:8545",
     },
-    ultronTestnet: {
-      url: "https://ultron-dev.io",
-      chainId: 1230,
-      accounts: [ACC_PRIVATE_KEY],
-    },
     ultronMainnet: {
       url: `https://ultron-rpc.net`,
       chainId: 1231,
