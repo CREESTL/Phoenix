@@ -177,8 +177,8 @@ async function checkMaxPriceChange(token, amount) {
     futureUsdcPrice = await router.getAmountOut(parseUnits("1", 6), futureUsdcAmount, currentUsdtAmount);
     currentUsdcPrice = FixedNumber.from(currentUsdcPrice);
     futureUsdcPrice = FixedNumber.from(futureUsdcPrice);
-    console.log("ZHOPA currentUsdPrice is ", currentUsdcPrice.toString());
-    console.log("ZHOPA futureUsdcPrice is ", futureUsdcPrice.toString());
+    console.log("currentUsdPrice is ", currentUsdcPrice.toString());
+    console.log("futureUsdcPrice is ", futureUsdcPrice.toString());
     difference = 100 - ((futureUsdcPrice.toUnsafeFloat() / currentUsdcPrice.toUnsafeFloat()) * 100);
   }
   // If difference is greater than the allowed one - return false
@@ -192,6 +192,10 @@ async function checkMaxPriceChange(token, amount) {
   return true;
 }
 
+// Finds the amount of tokens such that it will not affect token's price after the swap
+async function findOptimalAmount(amount) {
+  
+}
 
 // Compares prices of USDC and USDT tokens in the pool and 
 // swaps one token for another one
