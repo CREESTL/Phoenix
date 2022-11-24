@@ -6,13 +6,11 @@ require("@nomicfoundation/hardhat-chai-matchers");
 require("solidity-coverage");
 require("hardhat-gas-reporter");
 
-const {
-  ACC_PRIVATE_KEY,
-} = process.env;
+const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
 
 module.exports = {
   solidity: {
-    version: "0.8.9",
+    version: "0.6.12",
     settings: {
       optimizer: {
         enabled: true,
@@ -31,11 +29,6 @@ module.exports = {
     },
     localhost: {
       url: "http://127.0.0.1:8545",
-    },
-    ultronTestnet: {
-      url: "https://ultron-dev.io",
-      chainId: 1230,
-      accounts: [ACC_PRIVATE_KEY],
     },
     ultronMainnet: {
       url: `https://ultron-rpc.net`,
