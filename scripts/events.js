@@ -41,55 +41,55 @@ async function triggerEvents() {
   const USDC = await getContractAt("USDX", USDC_ADDRESS, wallet);
   // Initialize the Router contract
   const router = await getContractAt("UniswapV2Router02", ROUTER_ADDRESS, wallet);  
-  // Get the address of WETH (wrapped ETH used to buy USDC & USDT)
+  // This is the address of native tokens (ULX - NOT ETH)
   // No need to actually initialize the contract
-  const WETH_ADDRESS = await router.WETH();
+  const ULX_ADDRESS = await router.WETH();
   // The amount of USDT (USDC) to add as liquidity
-  // const amountTokenDesired = parseUnits("20", 6);
-  const amountTokenDesired = 20;
+  const amountTokenDesired = parseUnits("2", 6);
+  // const amountTokenDesired = 20;
   // The timeout for transactions
   const TIMEOUT = Date.now() + 1000 * 60 * 10;
 
   // Buy USDC and USDT for ETH
 
   const factory = await getContractAt("UniswapV2Factory", router.factory(), wallet);
-  console.log("USDT address is ", USDT.address);
+  let path = [ULX_ADDRESS, USDT.address];
+  console.log("USDT_address is ", USDT.address);
   console.log("USDC address is ", USDC.address);
-
-  console.log("Swap ETH for USDT");
-  console.log("Wallet ETH balance before swap is ", formatEther(await wallet.getBalance()));
-  console.log("Wallet USDT balance before swap is ", formatUnits(await USDT.balanceOf(wallet.address), 1));
-  let path = [WETH_ADDRESS, USDT.address];
+  console.log("Amount to swap is: ", formatUnits(amountTokenDesired, 6));
+  console.log("Swap ULX for USDT");
+  console.log("Wallet ULX balance before swap is ", formatEther(await wallet.getBalance()));
+  console.log("Wallet USDT balance before swap is ", formatUnits(await USDT.balanceOf(wallet.address), 6));
   let txResponse = await router.connect(wallet).swapExactETHForTokens(
     amountTokenDesired, // we need to have at least as many tokens as we want to add to the pool
     path,
     wallet.address,
     TIMEOUT,
-    {value: parseEther("1")}, 
+    // 1 ULX ~= 0.06 USDT in fork
+    {value: parseEther("100")}, 
   );
   let txReceipt = await txResponse.wait();
   console.log("Swap Finished!");
-  console.log("Wallet ETH balance after swap is ", formatEther(await wallet.getBalance()));
-  console.log("Wallet USDT balance after swap is ", formatUnits(await USDT.balanceOf(wallet.address), 1));
+  console.log("Wallet ULX balance after swap is ", formatEther(await wallet.getBalance()));
+  console.log("Wallet USDT balance after swap is ", formatUnits(await USDT.balanceOf(wallet.address), 6));
 
-  console.log("Swap ETH for USDC");
-  console.log("Wallet ETH balance before swap is ", formatEther(await wallet.getBalance()));
-  console.log("Wallet USDC balance before swap is ", formatUnits(await USDC.balanceOf(wallet.address), 1));
-  path = [WETH_ADDRESS, USDC.address];
+  console.log("Swap ULX for USDC");
+  console.log("Wallet ULX balance before swap is ", formatEther(await wallet.getBalance()));
+  console.log("Wallet USDC balance before swap is ", formatUnits(await USDC.balanceOf(wallet.address), 6));
+  path = [ULX_ADDRESS, USDC.address];
   txResponse = await router.connect(wallet).swapExactETHForTokens(
     amountTokenDesired, // we need to have at least as many tokens as we want to add to the pool
     path,
     wallet.address,
     TIMEOUT,
-    {value: parseEther("1")}, 
+    {value: parseEther("100")}, 
   );
   txReceipt = await txResponse.wait();
   console.log("Swap Finished!");
-  console.log("Wallet ETH balance after swap is ", formatEther(await wallet.getBalance()));
-  console.log("Wallet USDT balance after swap is ", formatUnits(await USDT.balanceOf(wallet.address), 1));
+  console.log("Wallet ULX balance after swap is ", formatEther(await wallet.getBalance()));
+  console.log("Wallet USDT balance after swap is ", formatUnits(await USDT.balanceOf(wallet.address), 6));
 
   // Deposit USDT into the pool
-
   // Now we have to add liquidity to the pair in order for token/ETH price to become 10 times greater
   console.log("Add Luquidity to USDC/USDT pool with USDT..");
   console.log("Approving adding liquidity...");
@@ -101,9 +101,9 @@ async function triggerEvents() {
   console.log("Approved!");
 
   console.log("Adding liquidity...");
-  console.log(`USDT balance of the wallet before adding:`, formatUnits(await USDT.balanceOf(wallet.address), 1));
-  console.log(`USDT balance of the pair before adding:`, formatUnits(await USDT.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the pair before adding:`, formatUnits(await USDC.balanceOf(pair.address), 1));
+  console.log(`USDT balance of the wallet before adding:`, formatUnits(await USDT.balanceOf(wallet.address), 6));
+  console.log(`USDT balance of the pair before adding:`, formatUnits(await USDT.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the pair before adding:`, formatUnits(await USDC.balanceOf(pair.address), 6));
 
   txResponse = await router.connect(wallet).addLiquidity (
     USDT.address,
@@ -120,22 +120,23 @@ async function triggerEvents() {
 
   console.log("Liquidity added!");
 
-  console.log(`USDT balance of the wallet after adding:`, await formatUnits(await USDT.balanceOf(wallet.address), 1));
-  console.log(`USDT balance of the pair after adding:`, formatUnits(await USDT.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the pair after adding:`, formatUnits(await USDC.balanceOf(pair.address), 1));
+  console.log(`USDT balance of the wallet after adding:`, await formatUnits(await USDT.balanceOf(wallet.address), 6));
+  console.log(`USDT balance of the pair after adding:`, formatUnits(await USDT.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the pair after adding:`, formatUnits(await USDC.balanceOf(pair.address), 6));
+  await delay(5000);
 
   // Swap tokens inside the pool
 
   console.log("Swap USDT for USDC inside the pool");
-  console.log(`USDT balance of the pair before swapping:`, formatUnits(await USDT.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the pair before swapping:`, formatUnits(await USDC.balanceOf(pair.address), 1));
+  console.log(`USDT balance of the pair before swapping:`, formatUnits(await USDT.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the pair before swapping:`, formatUnits(await USDC.balanceOf(pair.address), 6));
   path = [USDT.address, USDC.address];
   // We have to approve USDT
   approveTx = await USDT.connect(wallet).approve(router.address, amountTokenDesired);
   approveReceipt = await approveTx.wait();
   txResponse = await router.connect(wallet).swapExactTokensForTokens (
     amountTokenDesired,
-    1, // at least 1 USDC should return
+    0,
     path, 
     wallet.address,
     TIMEOUT,
@@ -144,23 +145,24 @@ async function triggerEvents() {
   txReceipt = await txResponse.wait();
 
   console.log("Swap finished!");
-  console.log(`USDT balance of the pair after swapping:`, formatUnits(await USDT.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the pair after swapping:`, formatUnits(await USDC.balanceOf(pair.address), 1));
+  console.log(`USDT balance of the pair after swapping:`, formatUnits(await USDT.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the pair after swapping:`, formatUnits(await USDC.balanceOf(pair.address), 6));
+  await delay(5000);
 
   // Remove liquidity from the pool
 
   console.log("Remove liquidity from the pool");
-  console.log(`USDT balance of the pair before liquidity withdrawal:`, formatUnits(await USDT.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the pair before liquidity withdrawal:`, formatUnits(await USDC.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the wallet before liquidity withdrawal:`, formatUnits(await USDC.balanceOf(wallet.address), 1));
-  console.log(`LP tokens balance of the user before liquidity withdrawal`, formatUnits(await pair.balanceOf(wallet.address), 1));
+  console.log(`USDT balance of the pair before liquidity withdrawal:`, formatUnits(await USDT.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the pair before liquidity withdrawal:`, formatUnits(await USDC.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the wallet before liquidity withdrawal:`, formatUnits(await USDC.balanceOf(wallet.address), 6));
+  console.log(`LP tokens balance of the user before liquidity withdrawal`, formatUnits(await pair.balanceOf(wallet.address), 18));
 
   liquidity = await pair.balanceOf(wallet.address);
   // Approve transfer of LP tokens from wallet back to the contract
   approveTx = await pair.approve(router.address, liquidity);
   approveReceipt = await approveTx.wait();
   // TODO before remove LPs
-  // Wallet's USDT balance: 126678
+  // Wallet's USDT balance: 626678
   // Wallet's USDC balance: 0
   // after
   // Wallet's USDT balance: 126677
@@ -180,10 +182,10 @@ async function triggerEvents() {
 
   console.log("Liquidity withdrawn!");
 
-  console.log(`USDT balance of the pair after liquidity withdrawal:`, formatUnits(await USDT.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the pair after liquidity withdrawal:`, formatUnits(await USDC.balanceOf(pair.address), 1));
-  console.log(`USDC balance of the wallet after liquidity withdrawal:`, formatUnits(await USDC.balanceOf(wallet.address), 1));
-  console.log(`LP tokens balance of the user after liquidity withdrawal`, formatUnits(await pair.balanceOf(wallet.address), 1));
+  console.log(`USDT balance of the pair after liquidity withdrawal:`, formatUnits(await USDT.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the pair after liquidity withdrawal:`, formatUnits(await USDC.balanceOf(pair.address), 6));
+  console.log(`USDC balance of the wallet after liquidity withdrawal:`, formatUnits(await USDC.balanceOf(wallet.address), 6));
+  console.log(`LP tokens balance of the user after liquidity withdrawal`, formatUnits(await pair.balanceOf(wallet.address), 18));
 
 }
 
