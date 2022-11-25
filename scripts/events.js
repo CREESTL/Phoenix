@@ -15,7 +15,7 @@ const { getContractFactory, getContractAt } = ethers;
  *   in the app)
  */
 
-const SWAP_THRESHOLD = parseEther(process.env.SWAP_THRESHOLD || "0");
+const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD === "" ? parseEther("0") : parseEther(process.env.SWAP_THRESHOLD);
 // The address of main UniswapV2Router02 deployed and used on Ultron mainnet
 const ROUTER_ADDRESS = "0x2149Ca7a3e4098d6C4390444769DA671b4dC3001";
 // Addresses of uUSDT and uUSDC
