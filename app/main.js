@@ -19,7 +19,7 @@ const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD || 1.5;
 // If amount is zero, then the whole user's balance of USDT and USDC 
 // will be swapped each time
 // Parse it with decimals = 6 
-const AMOUNT = parseUnits(process.env.AMOUNT, 6) || parseUnits("0", 6);
+const AMOUNT = process.env.AMOUNT === "" ? parseUnits("0", 6) : parseUnits(process.env.AMOUNT, 6);
 // The maximum allowed difference in token prices before and after the swap (in *percents*)
 // e.g. 10 = 10%; If after the swap the price of USDT decreases by 11%; Cancel the swap.
 // (price difference is checked *before* the actual swap)
@@ -35,6 +35,15 @@ const USDC_ADDRESS = "0x3c4e0fded74876295ca36f62da289f69e3929cc4";
 const PAIR_ADDRESS = "0x5910306486d3adF0f2ec3146A8C38e6C1F3404b7";
 // The timeout for transactions
 const TIMEOUT = Date.now() + 1000 * 60 * 10;
+// The amount of tokens used to get token's price
+// TODO The closer this amount is to the amount we are trying to deposit (user's balance, for example)
+// the less will be the difference between non-optimal amount (balance) and optimal amount (calculated with formula)
+const AMOUNT_FOR_PRICE = parseUnits("1", 6);
+// The directions of the swap
+const SwapDirection = {
+  USDT: 'USDT', // USDC -> USDT
+  USDC: 'USDC' // USDT -> USDC
+}
 
 // Allows to create a queue of promises and resolve them one by one
 class Queue {
@@ -56,11 +65,12 @@ let router;
 let USDT;
 let USDC;
 let queue = new Queue;
+let lastSwapDirection;
 
 // Returns the price of USDC in the pool (pair)
 // Price is a BigNumber of decimals 18
 async function getPriceUSDC() {
-  let bothPrices = await router.getAmountsOut(parseUnits("1", 6), [USDC.address, USDT.address]);
+  let bothPrices = await router.getAmountsOut(AMOUNT_FOR_PRICE, [USDC.address, USDT.address]);
   let usdcPrice = bothPrices[1];
   return usdcPrice;
 }
@@ -68,7 +78,7 @@ async function getPriceUSDC() {
 // Returns the price of USDT in the pool (pair)
 // Price is a BigNumber of decimals 6
 async function getPriceUSDT() {
-  let bothPrices = await router.getAmountsOut(parseUnits("1", 6), [USDT.address, USDC.address]);
+  let bothPrices = await router.getAmountsOut(AMOUNT_FOR_PRICE, [USDT.address, USDC.address]);
   let usdtPrice = bothPrices[1];
   return usdtPrice;
 }
@@ -125,6 +135,11 @@ async function swap(from, to, amount) {
     wallet.address,
     TIMEOUT
   );
+  if (to == USDC.address) {
+    lastSwapDirection = SwapDirection.USDC;
+  } else if (to == USDT.address) {
+    lastSwapDirection = SwapDirection.USDT;
+  }
 }
 
 // Shows USDT and USDC balances of the user 
@@ -163,7 +178,7 @@ async function checkMaxPriceChange(token, amount) {
     futureUsdtAmount = currentUsdtAmount.add(amount);
     // This is the price of the token after adding liquidity (not yet added)
     // Input token amount is incremented. Output token amount is the same
-    futureUsdtPrice = await router.getAmountOut(parseUnits("1", 6), futureUsdtAmount, currentUsdcAmount);
+    futureUsdtPrice = await router.getAmountOut(AMOUNT_FOR_PRICE, futureUsdtAmount, currentUsdcAmount);
     // Convert BigNumbers to Numbers to be able to get float results
     currentUsdtPrice = FixedNumber.from(currentUsdtPrice);
     futureUsdtPrice = FixedNumber.from(futureUsdtPrice)
@@ -174,17 +189,19 @@ async function checkMaxPriceChange(token, amount) {
   } else if (token.address == USDC.address) {
     currentUsdcPrice = await getPriceUSDC();
     futureUsdcAmount = currentUsdcAmount.add(amount);
-    futureUsdcPrice = await router.getAmountOut(parseUnits("1", 6), futureUsdcAmount, currentUsdtAmount);
+    futureUsdcPrice = await router.getAmountOut(AMOUNT_FOR_PRICE, futureUsdcAmount, currentUsdtAmount);
     currentUsdcPrice = FixedNumber.from(currentUsdcPrice);
     futureUsdcPrice = FixedNumber.from(futureUsdcPrice);
+    // TODO fix formatting here
+    // but if use formatUnits(..., 6) scipts stops working
     console.log("currentUsdPrice is ", currentUsdcPrice.toString());
     console.log("futureUsdcPrice is ", futureUsdcPrice.toString());
     difference = 100 - ((futureUsdcPrice.toUnsafeFloat() / currentUsdcPrice.toUnsafeFloat()) * 100);
   }
   // If difference is greater than the allowed one - return false
   // TODO delete this log
-  console.log("Price difference is: ", difference);
-  console.log("Max allowed price difference is", MAX_PRICE_CHANGE);
+  console.log(`Price difference is: ${difference}`);
+  console.log(`Max allowed price difference is: ${MAX_PRICE_CHANGE}`);
   if (difference > MAX_PRICE_CHANGE) {
     return false;
   }
@@ -192,9 +209,21 @@ async function checkMaxPriceChange(token, amount) {
   return true;
 }
 
-// Finds the amount of tokens such that it will not affect token's price after the swap
-async function findOptimalAmount(amount) {
-  
+// Finds a tokens amount satisfies this condition:
+// 
+async function findOptimalAmount(token) {
+
+  let [usdcReserve, usdtReserve, timestamp] = await pair.getReserves();
+  let reserveIn = token.address == USDC.address ? usdcReserve : usdtReserve;
+  console.log("\nreserveIn ", reserveIn)
+  let numerator = 1000 * reserveIn * (100 - MAX_PRICE_CHANGE);
+  console.log("numerator ", numerator);
+  // TODO not sure that to use AMOUNT_FOR_PRICE here
+  let denominator = 100_000 / AMOUNT_FOR_PRICE + 0.997 * MAX_PRICE_CHANGE; 
+  console.log("denominator ", denominator);
+  let optimalAmount = numerator / denominator;
+  console.log("optimal amount ", parseUnits(optimalAmount.toString(), 6));
+  return optimalAmount;
 }
 
 // Compares prices of USDC and USDT tokens in the pool and 
@@ -220,6 +249,12 @@ async function comparePricesAndSwap(amount) {
 
     console.log("USDT is more expensive");
     console.log("Swapping: USDT -> USDC");  
+
+    // If the last swap was USDT -> USDC, there is no need to do another one
+    if (lastSwapDirection == SwapDirection.USDC) {
+      console.log("Last swap was USDT -> USDC already. Cancel the swap...")
+      return;
+    }
 
     // User wants to swap an exact amount of tokens
     if (amount != parseUnits(0, 6)) {
@@ -275,6 +310,12 @@ async function comparePricesAndSwap(amount) {
     console.log("USDC is more expensive");
     console.log("Swapping: USDC -> USDT");  
 
+    // If the last swap was USDC -> USDT, there is no need to do another one
+    if (lastSwapDirection == SwapDirection.USDT) {
+      console.log("Last swap was USDC -> USDT already. Cancel the swap...")
+      return;
+    }
+
     // User wants to swap an exact amount of tokens
     if (amount != 0) {
 
@@ -310,8 +351,12 @@ async function comparePricesAndSwap(amount) {
       // Swap is impossible if price will change too much
       if (!(await checkMaxPriceChange(USDC, balance))) {
         console.log("The swap will affect price too much. Cancel swap!");
-        // TODO start decreasing the amount until its ok
-        // Do a binary search
+        let optimalAmount = await findOptimalAmount(USDC);
+        console.log("current amount used for price is ", AMOUNT_FOR_PRICE);
+        console.log("optimal amount for price change is ", optinalAmount);
+        if (!(await checkMaxPriceChange(USDC, optimalAmount))) {
+          console.log("Still not an optimal amount");
+        }
       }
 
       let approveTx = await USDC.connect(wallet).approve(router.address, balance);
