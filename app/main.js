@@ -165,46 +165,44 @@ async function checkBalance(token, amount) {
 // Returns `false` if price change is *greater* than max allowed
 async function checkMaxPriceChange(token, amount) {
 
-  // TODO USE ONLY FIXED NUMBER HERE
-  
+  // Convert amount to FixedNumber
+  amount = FixedNumber.from(amount);
+
   // Order of tokens: USDC - USDT
   let [currentUsdcAmount, currentUsdtAmount, timestamp] = await pair.getReserves();
-  let currentUsdtPrice;
-  let currentUsdcPrice;
+  currentUsdcAmount = FixedNumber.from(currentUsdcAmount);
+  currentUsdtAmount = FixedNumber.from(currentUsdtAmount);
+
+  let currentUsdcPrice = FixedNumber.from(await getPriceUSDC());
+  let currentUsdtPrice = FixedNumber.from(await getPriceUSDT());
+
   let difference;
 
+  console.log("\n checking price")
+  console.log("amount string ", amount.toString());
   if (token.address == USDT.address) {
-    // Get the current price of the token
-    currentUsdtPrice = await getPriceUSDT();
     // This is the amount of the tokens in the pool after adding liquidity (not yet added)
-    futureUsdtAmount = currentUsdtAmount.add(amount);
+    let futureUsdtAmount = currentUsdtAmount.addUnsafe(amount);
     // This is the price of the token after adding liquidity (not yet added)
     // Input token amount is incremented. Output token amount is the same
-    futureUsdtPrice = await router.getAmountOut(AMOUNT_FOR_PRICE, futureUsdtAmount, currentUsdcAmount);
-    // Convert BigNumbers to Numbers to be able to get float results
-    currentUsdtPrice = FixedNumber.from(currentUsdtPrice);
-    futureUsdtPrice = FixedNumber.from(futureUsdtPrice)
+    let futureUsdtPrice = FixedNumber.from(await router.getAmountOut(AMOUNT_FOR_PRICE, futureUsdtAmount, currentUsdcAmount));
     // Calculate the percentage difference in current and future prices
     // After liquidity adding, future price of token *can not* be higher than the current one
     // it can be less or equal. So this division can not result in a float number
-    difference = 100 - ((futureUsdtPrice.toUnsafeFloat() / currentUsdtPrice.toUnsafeFloat()) * 100);
+    difference = FixedNumber.from(100).subUnsafe(futureUsdtPrice.divUnsafe(currentUsdtPrice).mulUnsafe(FixedNumber.from(100)));
   } else if (token.address == USDC.address) {
-    currentUsdcPrice = await getPriceUSDC();
-    futureUsdcAmount = currentUsdcAmount.add(amount);
-    futureUsdcPrice = await router.getAmountOut(AMOUNT_FOR_PRICE, futureUsdcAmount, currentUsdtAmount);
-    currentUsdcPrice = FixedNumber.from(currentUsdcPrice);
-    futureUsdcPrice = FixedNumber.from(futureUsdcPrice);
-    // TODO fix formatting here
-    // but if use formatUnits(..., 6) scipts stops working
-    console.log("currentUsdPrice is ", currentUsdcPrice.toString());
-    console.log("futureUsdcPrice is ", futureUsdcPrice.toString());
-    difference = 100 - ((futureUsdcPrice.toUnsafeFloat() / currentUsdcPrice.toUnsafeFloat()) * 100);
+    let futureUsdcAmount = currentUsdcAmount.addUnsafe(amount);
+    console.log("future usdc amount string ", futureUsdcAmount.toString())
+    let futureUsdcPrice = FixedNumber.from(await router.getAmountOut(AMOUNT_FOR_PRICE, futureUsdcAmount, currentUsdtAmount));
+    console.log("currentUsdPrice is ", formatUnits(currentUsdcPrice.toUnsafeFloat(), 6));
+    console.log("futureUsdcPrice is ", formatUnits(futureUsdcPrice.toUnsafeFloat(), 6));
+    difference = FixedNumber.from(100).subUnsafe(futureUsdcPrice.divUnsafe(currentUsdcPrice).mulUnsafe(FixedNumber.from(100)));
   }
   // If difference is greater than the allowed one - return false
   // TODO delete this log
-  console.log(`Price difference is: ${difference}`);
+  console.log(`Price difference is: ${difference.toUnsafeFloat()}%`);
   console.log(`Max allowed price difference is: ${MAX_PRICE_CHANGE}`);
-  if (difference > MAX_PRICE_CHANGE) {
+  if (difference.toUnsafeFloat() > MAX_PRICE_CHANGE) {
     return false;
   }
 
@@ -217,19 +215,24 @@ async function findOptimalAmount(token) {
 
   let [usdcReserve, usdtReserve, timestamp] = await pair.getReserves();
   let currentReserveIn = token.address == USDC.address ? usdcReserve : usdtReserve;
-  // TODO delete comments
   currentReserveIn = FixedNumber.from(currentReserveIn);
   maxPriceChange = FixedNumber.from(MAX_PRICE_CHANGE);
   amountForPrice = FixedNumber.from(AMOUNT_FOR_PRICE);
   let numerator = (FixedNumber.from(100_000).mulUnsafe(currentReserveIn)).addUnsafe(FixedNumber.from(997).mulUnsafe(maxPriceChange).mulUnsafe(amountForPrice));
-  // console.log("numerator ", numerator);
+  // TODO delete logs
+  console.log("numerator string ", numerator.toString());
   let denominator = FixedNumber.from(1000).mulUnsafe((FixedNumber.from(100).subUnsafe(maxPriceChange)));
-  // console.log("denominator ", denominator);
+  console.log("denominator string ", denominator.toString());
   // The maximum  reserveIn that will not change the price for more than MAX_PRICE_CHANGE percents
   let maxReserveIn = numerator.divUnsafe(denominator);
-  // console.log("maxReserveIn ", maxReserveIn);
+  console.log("current reserve string ", currentReserveIn.toString());
+  console.log("max reserve string ", maxReserveIn.toString());
+  // console.log("currentReserveIn ", formatUnits(currentReserveIn.toUnsafeFloat(), 6));
+  // console.log("maxReserveIn ", maxReserveIn.round(10).toString());
+  // console.log("maxReserveIn ", formatUnits(maxReserveIn.toString(), 6));
   // The maximum amount of input token to deposit into the pool for the price to change not more than for MAX_PRICE_CHANGE percents
   let maxAmount = maxReserveIn.subUnsafe(currentReserveIn);
+  console.log("DIFFERENCE STRING IS: ", maxAmount.toString())
   // console.log("maxAmount", maxAmount);
   return maxAmount;
 }
@@ -266,7 +269,6 @@ async function comparePricesAndSwap(amount) {
 
     // User wants to swap an exact amount of tokens
     if (amount != parseUnits(0, 6)) {
-
 
       // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDT, amount))) {
@@ -358,11 +360,17 @@ async function comparePricesAndSwap(amount) {
 
       // Swap is impossible if price will change too much
       if (!(await checkMaxPriceChange(USDC, balance))) {
+        // TODO delete logs
         console.log("The swap will affect price too much. Cancel swap!");
         let maxAmount = await findOptimalAmount(USDC);
-        console.log("we tried to deposit: ", formatUnits(balance, 6));
-        console.log("max amount that can be deposited without price change is", maxAmount.toString());
-        if (!(await checkMaxPriceChange(USDC, maxAmount.toUnsafeFloat()))) {
+        console.log("we tried to deposit string: ", balance.toString());
+        let [whole, parts] = maxAmount.toString().split(".");
+        let sixDecimals = parts.substring(0, 6);
+        let formatMaxAmount = whole + sixDecimals;
+        console.log("formated max amount string is ", formatMaxAmount);
+        console.log("trying again with max amount BigNumber ", BigNumber.from(formatMaxAmount))
+        maxAmount = BigNumber.from(formatMaxAmount)
+        if (!(await checkMaxPriceChange(USDC, maxAmount))) {
           console.log("Still not an optimal amount");
           return;
         }
