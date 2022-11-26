@@ -165,6 +165,8 @@ async function checkBalance(token, amount) {
 // Returns `false` if price change is *greater* than max allowed
 async function checkMaxPriceChange(token, amount) {
 
+  // TODO USE ONLY FIXED NUMBER HERE
+  
   // Order of tokens: USDC - USDT
   let [currentUsdcAmount, currentUsdtAmount, timestamp] = await pair.getReserves();
   let currentUsdtPrice;
@@ -214,16 +216,22 @@ async function checkMaxPriceChange(token, amount) {
 async function findOptimalAmount(token) {
 
   let [usdcReserve, usdtReserve, timestamp] = await pair.getReserves();
-  let reserveIn = token.address == USDC.address ? usdcReserve : usdtReserve;
-  console.log("\nreserveIn ", reserveIn)
-  let numerator = 1000 * reserveIn * (100 - MAX_PRICE_CHANGE);
-  console.log("numerator ", numerator);
-  // TODO not sure that to use AMOUNT_FOR_PRICE here
-  let denominator = 100_000 / AMOUNT_FOR_PRICE + 0.997 * MAX_PRICE_CHANGE; 
-  console.log("denominator ", denominator);
-  let optimalAmount = numerator / denominator;
-  console.log("optimal amount ", parseUnits(optimalAmount.toString(), 6));
-  return optimalAmount;
+  let currentReserveIn = token.address == USDC.address ? usdcReserve : usdtReserve;
+  // TODO delete comments
+  currentReserveIn = FixedNumber.from(currentReserveIn);
+  maxPriceChange = FixedNumber.from(MAX_PRICE_CHANGE);
+  amountForPrice = FixedNumber.from(AMOUNT_FOR_PRICE);
+  let numerator = (FixedNumber.from(100_000).mulUnsafe(currentReserveIn)).addUnsafe(FixedNumber.from(997).mulUnsafe(maxPriceChange).mulUnsafe(amountForPrice));
+  // console.log("numerator ", numerator);
+  let denominator = FixedNumber.from(1000).mulUnsafe((FixedNumber.from(100).subUnsafe(maxPriceChange)));
+  // console.log("denominator ", denominator);
+  // The maximum  reserveIn that will not change the price for more than MAX_PRICE_CHANGE percents
+  let maxReserveIn = numerator.divUnsafe(denominator);
+  // console.log("maxReserveIn ", maxReserveIn);
+  // The maximum amount of input token to deposit into the pool for the price to change not more than for MAX_PRICE_CHANGE percents
+  let maxAmount = maxReserveIn.subUnsafe(currentReserveIn);
+  // console.log("maxAmount", maxAmount);
+  return maxAmount;
 }
 
 // Compares prices of USDC and USDT tokens in the pool and 
@@ -351,11 +359,12 @@ async function comparePricesAndSwap(amount) {
       // Swap is impossible if price will change too much
       if (!(await checkMaxPriceChange(USDC, balance))) {
         console.log("The swap will affect price too much. Cancel swap!");
-        let optimalAmount = await findOptimalAmount(USDC);
-        console.log("current amount used for price is ", AMOUNT_FOR_PRICE);
-        console.log("optimal amount for price change is ", optinalAmount);
-        if (!(await checkMaxPriceChange(USDC, optimalAmount))) {
+        let maxAmount = await findOptimalAmount(USDC);
+        console.log("we tried to deposit: ", formatUnits(balance, 6));
+        console.log("max amount that can be deposited without price change is", maxAmount.toString());
+        if (!(await checkMaxPriceChange(USDC, maxAmount.toUnsafeFloat()))) {
           console.log("Still not an optimal amount");
+          return;
         }
       }
 
