@@ -15,6 +15,10 @@ const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
 // The USDC/USDT (or USDC/USDT) price ratio enough to trigger the swap
 // If no value was provided by the user, it's set to 1.5
 const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD || 1.5;
+// Check that threshold if greater than 1
+if (!(SWAP_THRESHOLD > 1)) {
+  throw "Swap threshold should be a greater than 1!";
+}
 // The amount of tokens to swap each time
 // If no amount is provided, it's set to zero
 // If amount is not zero, then exactly this amount of tokens (USDT or USDC) 
@@ -22,12 +26,21 @@ const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD || 1.5;
 // If amount is zero, then the whole user's balance of USDT and USDC 
 // will be swapped each time
 const AMOUNT = process.env.AMOUNT === "" ? parseUnits("0", 6) : parseUnits(process.env.AMOUNT, 6);
+// Check that amount is not negative
+if (AMOUNT.toNumber() < 0) {
+  throw "Swap amount can not be a negative integer!";
+}
 // The maximum allowed difference in token prices before and after the swap (in *percents*)
 // e.g. 10 = 10%; If after the swap the price of USDT decreases by 11 - cancel the swap.
 // (price difference is checked *before* the actual swap)
 // (the more USDTs are transferred into the pool, the lower the price of USDT gets)
 // If no value is provided by the user, 1% is set as a default value
 const MAX_PRICE_CHANGE = process.env.MAX_PRICE_CHANGE || 1; 
+// Check that max price change is greater than zero
+// It can't be zero because *any* deposit will change the price
+if (!(MAX_PRICE_CHANGE > 0)) {
+  throw "Maximum price change should be greater than 0!";
+}
 // The address of main UniswapV2Router02 deployed and used on Ultron mainnet
 const ROUTER_ADDRESS = "0x2149Ca7a3e4098d6C4390444769DA671b4dC3001";
 // Addresses of uUSDT and uUSDC
@@ -359,10 +372,6 @@ async function listenAndSwap() {
   console.log(`Amount to swap is: ${formatUnits(AMOUNT, 6)}`);
   console.log(`Max price change is: ${MAX_PRICE_CHANGE}%`);
 
-  // Make sure that threshold is greater than 1
-  if (!(SWAP_THRESHOLD > 1)) {
-    throw "Swap threshold should be a greater than 1";
-  }
 
   // If the network is not Ultron - get the default provider for the specified network
   if (network.name != 'ultronMainnet') {
