@@ -7,6 +7,7 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
 [Run the Bot](#run)  
 [Wallets](#wallets)  
 [Bot Logic](#logic)
+[Scripts](#scripts)
 
 <a name="run"/>
 
@@ -24,9 +25,21 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
   ```
   ACC_PRIVATE_KEY=***your private key***
   ```
-  :warning:**DO NOT SHARE YOUR .env FILE IN ANY WAY OR YOU RISK TO LOSE ALL YOUR FUNDS**:warning:
-
-#### 1. Run 
+- Input a swap threshold (see [Bot Logic](#logic)) to the `.env` file
+  ```
+  SWAP_THRESHOLD=***swap threshold***
+  ```
+- Input a swap amount (see [Bot Logic](#logic)) to the `.env` file
+  ```
+  AMOUNT=***amount***
+  ```
+- Input a maximum price change (in %) (see [Bot Logic](#logic)) to the `.env` file
+  ```
+  MAX_PRICE_CHANGE=***maximum price change***
+  ```
+:warning:**DO NOT SHARE YOUR .env FILE IN ANY WAY OR YOU RISK TO LOSE ALL YOUR FUNDS**:warning:
+  
+#### Run 
 
 ```
 npx hardhat run app/main.js --network <network_name>
@@ -73,3 +86,17 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 <a name="logic"/>
 
 ### Bot Logic
+#### Terms
+- `Swap threshold` - the ratio of tokens' prices enough to initialize the swap. (e.g. set `swap threshold` to `1.5` if you want the swap to happen when USDC is 1.5 times more expensive than USDT of vice versa)
+- `Swap amount` - the amount of tokens (USDT or USDC depending on the tokens' prices ratio) to swap
+    - If `swap amount` is `0` then *all user's tokens will be swapped*. So between the swaps a user will have his whole balance consisting of either USDT or USDC
+  - If `swap amount` is *not* `0` then exactly the provided amount of tokens will be swapped
+  - `swap amount` *can not* be a negative integer
+- `Max price change` - how much can a price of deposited token change after the deposit (*in percents*)
+    - If the expected price of the token changes for more than `max price change` %, the swap would be cancelled
+
+#### Logic Flow
+
+<a name="scripts"/>
+
+### Scripts
