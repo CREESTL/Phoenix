@@ -11,8 +11,7 @@ const { getContractFactory, getContractAt } = ethers;
  * For example:
  * - npx hardhat node --network hardhat (start a local node of Ultron fork)
  * - npx hardhat run app/main.js --network localhost (run app on the local node)
- * - npx hardhat run test/events.js --networl localhost (run this script to trigger events
- *   in the app)
+ * - npx hardhat run test/events.js --network localhost (run this script to trigger events in the app)
  */
 
 const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD === "" ? parseEther("0") : parseEther(process.env.SWAP_THRESHOLD);
@@ -161,13 +160,6 @@ async function triggerEvents() {
   // Approve transfer of LP tokens from wallet back to the contract
   approveTx = await pair.approve(router.address, liquidity);
   approveReceipt = await approveTx.wait();
-  // TODO before remove LPs
-  // Wallet's USDT balance: 626678
-  // Wallet's USDC balance: 0
-  // after
-  // Wallet's USDT balance: 126677
-  // Wallet's USDC balance: 37
-  // understand why and fix that
   txResponse = await router.connect(wallet).removeLiquidity (
     USDT.address,
     USDC.address,
