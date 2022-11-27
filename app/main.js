@@ -372,11 +372,14 @@ async function listenAndSwap() {
     provider = new ethers.providers.JsonRpcProvider('https://ultron-rpc.net');
   }
 
-  // Initialize user's wallet
-  // TODO This should be used for live network
-  // wallet = new ethers.Wallet(ACC_PRIVATE_KEY, provider);
-  wallets = await ethers.getSigners();
-  wallet = wallets[0];
+  // Initialize user's wallet depending on the chosen network
+  if (network.name != 'ultronMainnet') {
+    // Get default hardhat signers
+    wallets = await ethers.getSigners();
+    wallet = wallets[0];
+  } else {
+    wallet = new ethers.Wallet(ACC_PRIVATE_KEY, provider);
+  }
 
   // Initialize the pair contract
   // Order of tokens: USDC - USDT
