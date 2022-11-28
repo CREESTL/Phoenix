@@ -6,7 +6,7 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
 
 [Run the Bot](#run)  
 [Wallets](#wallets)  
-[Bot Logic](#logic)
+[Bot Logic](#logic)  
 [Scripts](#scripts)
 
 <a name="run"/>
