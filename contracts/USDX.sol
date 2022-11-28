@@ -5,8 +5,5 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/presets/ERC20PresetMinterPauser.sol";
 
 contract USDX is ERC20PresetMinterPauser {
-
-  constructor() ERC20PresetMinterPauser("", "") public {
-
-  }
+    constructor() public ERC20PresetMinterPauser("", "") {}
 }

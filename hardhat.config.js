@@ -24,8 +24,8 @@ module.exports = {
       // Fork Ultron mainnet when USDC/USDT price was 1.004953
       forking: {
         url: "https://ultron-rpc.net",
-        blockNumber: 1805923
-      }   
+        blockNumber: 1805923,
+      },
     },
     localhost: {
       url: "http://127.0.0.1:8545",

@@ -2,12 +2,13 @@
 
 pragma solidity =0.6.12;
 
-import './interfaces/IUniswapV2Factory.sol';
-import './UniswapV2Pair.sol';
+import "./interfaces/IUniswapV2Factory.sol";
+import "./UniswapV2Pair.sol";
 import "./dao/IDAO.sol";
 
 contract UniswapV2Factory is IUniswapV2Factory {
-    bytes32 public constant INIT_CODE_PAIR_HASH = keccak256(abi.encodePacked(type(UniswapV2Pair).creationCode));
+    bytes32 public constant INIT_CODE_PAIR_HASH =
+        keccak256(abi.encodePacked(type(UniswapV2Pair).creationCode));
     address public override feeTo;
 
     mapping(address => mapping(address => address)) public override getPair;
@@ -19,14 +20,19 @@ contract UniswapV2Factory is IUniswapV2Factory {
 
     address public override daoAddress;
 
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+    event PairCreated(
+        address indexed token0,
+        address indexed token1,
+        address pair,
+        uint
+    );
 
     constructor(address _initialDaoSetter, address _treasuryAddress) public {
         initialDaoSetter = _initialDaoSetter;
         treasuryAddress = _treasuryAddress;
     }
 
-    function allPairsLength() external override view returns (uint) {
+    function allPairsLength() external view override returns (uint) {
         return allPairs.length;
     }
 
@@ -34,11 +40,19 @@ contract UniswapV2Factory is IUniswapV2Factory {
         return keccak256(type(UniswapV2Pair).creationCode);
     }
 
-    function createPair(address tokenA, address tokenB) external override returns (address pair) {
-        require(tokenA != tokenB, 'UniswapV2: IDENTICAL_ADDRESSES');
-        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        require(token0 != address(0), 'UniswapV2: ZERO_ADDRESS');
-        require(getPair[token0][token1] == address(0), 'UniswapV2: PAIR_EXISTS'); // single check is sufficient
+    function createPair(
+        address tokenA,
+        address tokenB
+    ) external override returns (address pair) {
+        require(tokenA != tokenB, "UniswapV2: IDENTICAL_ADDRESSES");
+        (address token0, address token1) = tokenA < tokenB
+            ? (tokenA, tokenB)
+            : (tokenB, tokenA);
+        require(token0 != address(0), "UniswapV2: ZERO_ADDRESS");
+        require(
+            getPair[token0][token1] == address(0),
+            "UniswapV2: PAIR_EXISTS"
+        ); // single check is sufficient
         bytes memory bytecode = type(UniswapV2Pair).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         assembly {
@@ -69,30 +83,31 @@ contract UniswapV2Factory is IUniswapV2Factory {
 
     function setDao(uint id) external override {
         address _daoAddress = IDAO(daoAddress).isDAOChangeAvailable(id);
-        require(_daoAddress != daoAddress, 'same address');
+        require(_daoAddress != daoAddress, "same address");
         daoAddress = _daoAddress;
         require(IDAO(daoAddress).confirmDAOChangeRequest(id), "confirmed");
     }
 
     function setFeeTo(uint id) external override {
         address _feeTo = IDAO(daoAddress).isFeeToChangeAvailable(id);
-        require(_feeTo != feeTo, 'same address');
+        require(_feeTo != feeTo, "same address");
         feeTo = _feeTo;
         require(IDAO(daoAddress).confirmFeeToChangeRequest(id), "confirmed");
     }
 
     function setTreasuryAddress(uint id) external override {
-        address _treasuryAddress = IDAO(daoAddress).isTreasuryChangeAvailable(id);
-        require(_treasuryAddress != treasuryAddress, 'same address');
+        address _treasuryAddress = IDAO(daoAddress).isTreasuryChangeAvailable(
+            id
+        );
+        require(_treasuryAddress != treasuryAddress, "same address");
         treasuryAddress = _treasuryAddress;
         require(IDAO(daoAddress).confirmTreasuryChangeRequest(id), "confirmed");
     }
 
     function setRouterAddress(uint id) external override {
         address _routerAddress = IDAO(daoAddress).isRouterChangeAvailable(id);
-        require(_routerAddress != routerAddress, 'same address');
+        require(_routerAddress != routerAddress, "same address");
         routerAddress = _routerAddress;
         require(IDAO(daoAddress).confirmRouterChangeRequest(id), "confirmed");
     }
-
 }
