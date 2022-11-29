@@ -17,6 +17,7 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
 
 #### Prerequisites
 
+- Install [Git](https://git-scm.com/)
 - Install [Node.js](https://nodejs.org/en/download/)
 - Clone this repository with `git clone https://git.sfxdx.ru/phoenix/autobot`
 - Navigate to the directory with the cloned code
@@ -39,6 +40,12 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
   ```
   MAX_PRICE_CHANGE=***maximum price change***
   ```
+- Input a gas price multiplier (see [Bot Logic](#logic)) to the `.env` file
+
+  ```
+  GAS_MULTIPLIER=***gas price multiplier***
+  ```
+
   :warning:**DO NOT SHARE YOUR .env FILE IN ANY WAY OR YOU RISK TO LOSE ALL YOUR FUNDS**:warning:
 
 #### Run
@@ -93,13 +100,19 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 #### Terms
 
 - `Swap threshold` - the ratio of tokens' prices enough to initialize the swap. (e.g. set swap threshold to `1.5` if you want the swap to happen when USDC is 1.5 times more expensive than USDT of vice versa)
+  - If no value is provided, the default value of `1.5` is used
 - `Swap amount` - the amount of tokens (USDT or USDC depending on the tokens' prices ratio) to swap
   - If swap amount is 0 then _all user's tokens will be swapped_. So between the swaps a user will have his whole balance consisting of either USDT or USDC (**only** if user's balance is less than the _optimal amount_)
   - If swap amount is _not_ 0 then exactly the provided amount of tokens will be swapped
   - Swap amount _can not_ be a negative integer
 - `Max price change` - how much can a price of deposited token change after the deposit (_in percents_)
   - If the expected price of the token changes for more than [max price change %], the swap would be cancelled
-  - Max price change can not be a negative integer
+  - Max price change _should_ be a positive integer
+  - If no value is provided, the default value of `1%` is used
+- `Gas price multiplier` - how many times to increase the default gas price
+  - The higher the multiplier, the higher the gas price of the transaction, the faster the transaction gets mined and included into the block
+  - Multiplier _should_ be a positive integer
+  - If no value is provided, the default value of `2` is used
 
 #### Logic Flow
 

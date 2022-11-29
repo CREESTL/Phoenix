@@ -44,6 +44,14 @@ const MAX_PRICE_CHANGE = process.env.MAX_PRICE_CHANGE || 1;
 if (!(MAX_PRICE_CHANGE > 0)) {
   throw "Maximum price change should be greater than 0!";
 }
+// How many times to increment the "market" gas price to mine the transaction faster
+// If no value is provided, x2 is set as default
+const GAS_MULTIPLIER = process.env.GAS_MULTIPLIER || 2;
+// Check that gas price multiplier is not 0
+// It can be less than 1 and that will slow down the transaction being mined
+if (GAS_MULTIPLIER <= 0) {
+  throw "Gas price multiplier should be greater than 0!";
+}
 // The address of main UniswapV2Router02 deployed and used on Ultron mainnet
 const ROUTER_ADDRESS = "0x2149Ca7a3e4098d6C4390444769DA671b4dC3001";
 // Addresses of uUSDT and uUSDC
@@ -139,7 +147,6 @@ async function checkThreshold() {
   ) {
     return true;
   }
-  console.log("Swap threshold was not reached yet!");
   return false;
 }
 
@@ -150,9 +157,15 @@ async function checkThreshold() {
 async function swap(from, to, amount) {
   console.log(`Swap amount is ${formatUnits(amount, 6)}`);
   let path = [from, to];
+  // Get the current gas price
+  let gasPrice = await wallet.getGasPrice();
+  // Multiply current gas price for the provided multyplier amount
+  let newGasPrice = gasPrice.mul(GAS_MULTIPLIER);
   await router
     .connect(wallet)
-    .swapExactTokensForTokens(amount, 1, path, wallet.address, TIMEOUT);
+    .swapExactTokensForTokens(amount, 1, path, wallet.address, TIMEOUT, {
+      gasPrice: newGasPrice,
+    });
   if (to == USDC.address) {
     lastSwapDirection = SwapDirection.USDC;
   } else if (to == USDT.address) {
@@ -365,9 +378,6 @@ async function comparePricesAndSwap(amount) {
         console.log("User has not enough tokens to swap!");
         return;
       }
-
-      console.log("balance is ", balance);
-      console.log("optimal amount is ", optimalAmount);
       // Swap is impossible if price will change too much
       if (balance.gt(optimalAmount)) {
         console.log("The swap will affect price too much. Cancel swap!");
@@ -403,6 +413,7 @@ async function listenAndSwap() {
   console.log(`Swap threshold is: ${SWAP_THRESHOLD}`);
   console.log(`Amount to swap is: ${formatUnits(AMOUNT, 6)}`);
   console.log(`Max price change is: ${MAX_PRICE_CHANGE}%`);
+  console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
   // If the network is not Ultron - get the default provider for the specified network
   if (network.name != "ultronMainnet") {
@@ -436,7 +447,7 @@ async function listenAndSwap() {
   console.log("USDC address is ", USDC.address);
   await showWalletBalance();
 
-  console.log("Listening for pool events...");
+  console.log("\nListening for pool events...");
 
   pair.on("Mint", () => {
     console.log("\nLiquidity has been added to the pool!");
