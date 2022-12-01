@@ -5,9 +5,9 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
 #### Table on contents
 
 [Run the Bot](#run)  
+[Test the Bot](#tests)  
 [Wallets](#wallets)  
 [Bot Logic](#logic)  
-[Scripts](#scripts)
 
 <a name="run"/>
 
@@ -58,17 +58,52 @@ npx hardhat run app/main.js --network <network_name>
 
 а) **Ultron test** network  
 Make sure you have _enough test tokens_ for testnet.
-
 ```
 npx hardhat run app/main.js --network ultronTestnet
 ```
 
 a) **Ultron main** main network  
 Make sure you have _enough real tokens_ in your wallet. Deployment to the mainnet costs money!
-
 ```
 npx hardhat run app/main.js --network ultronMainnet
 ```
+
+<a name="tests"/>
+
+### Test the Bot
+#### Integrational Test
+One of the ways of testing is running both the `app/main.js` and `scripts/events.js` on the same network. The `events.js` script (as you can probably tell from the name of it) triggers the events that the `main.js` app should listen to inside the pool of USDT/USDC. The best way to run them together is:
+
+- Run _forked_ Ultron Mainnet node locally:
+```
+npx hardhat node --network hardhat
+```
+
+- Run `main.js` app:
+```
+npx hardhat run app/main.js --network localhost
+```
+
+- Run `events.js` script:
+```
+npx hardhat run scripts/events.js --network localhost
+```
+
+After that you should see the bot reacting to events in the pool and making a swap from USDC to USDT.
+
+#### Unit Tests
+Unit tests should be executed on the local running node of forked Ultron mainnet.
+- Run _forked_ Ultron Mainnet node locally:
+```
+npx hardhat node --network hardhat
+```
+- Run tests
+```
+npx hardhat test --network localhost
+```
+
+**Note №1** In order for unit tests to run correctly you have to **restart the node** before running tests again.
+**Note №2** Current file of unit tests contains a *copy* of all functions from the main file of the bot, it *does not* import functions from that file. So if you make any changes inside the `main.js` file, then you should make the same changes inside the `unitTests.js` file to *keep tests up-to-date*
 
 <a name="wallets"/>
 
@@ -86,7 +121,7 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 If you choose to create a fresh wallet for this project, you should use `createWallet` script from `scripts/` directory.
 
 ```
-npx hardhat run scripts/createWallet.js
+node scripts/createWallet.js
 ```
 
 This will generate a single new wallet and show its address and private key. **Save** them somewhere else!  
@@ -213,28 +248,4 @@ In all above examples "**Mint**" event could be replaced with "**Swap**" or "**B
 
 In all above examples if the price difference of tokens was less than 1.5, the swap would have been cancelled.
 
-<a name="scripts"/>
 
-### Scripts
-
-One of the ways of testing is running both the `app/main.js` and `scripts/events.js` on the same network. The `events.js` script (as you can probably tell from the name of it) triggers the events that the `main.js` app should listen to inside the pool of USDT/USDC. The best way to run them together is:
-
-- Run _forked_ Ultron Mainnet node locally:
-
-```
-npx hardhat node --network hardhat
-```
-
-- Run `main.js` app:
-
-```
-npx hardhat run app/main.js --network localhost
-```
-
-- Run `events.js` script:
-
-```
-npx hardhat run scripts/events.js --network localhost
-```
-
-After that you should see the bot reacting to events in the pool and making a swap from USDC to USDT.
