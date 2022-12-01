@@ -1,77 +1,51 @@
 const { ethers, network } = require("hardhat");
+const { expect } = require("chai");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
 const delay = require("delay");
+require("dotenv").config();
 const { formatEther, parseEther, parseUnits, formatUnits, keccak256 } =
   ethers.utils;
 const { getContractFactory, getContractAt, BigNumber, FixedNumber } = ethers;
-module.exports = {listenAndSwap};
+const { 
+  buyToken,
+  swapTokens,
+  addLiquidityWithToken,
+  removeLiquidity,
+  triggerEvents,
+} = require("../scripts/events.js");
 
-// Note that most of operations with numbers(in functions) are done using FixedNumber lib to be able to
-// make floating point divisions (BigNumber does not allow this)
+// This script is meant to be executed on localhost only
+if (network.name !== "localhost") {
+  console.log("This script is for `localhost` network only!");
+  process.exit(0);
+}
 
-// The private key of the user
-const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
-// The USDC/USDT (or USDC/USDT) price ratio enough to trigger the swap
-// If no value was provided by the user, it's set to 1.5
-const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD || 1.5;
-// Check that threshold if greater than 1
-if (!(SWAP_THRESHOLD > 1)) {
-  throw "Swap threshold should be a greater than 1!";
-}
-// The amount of tokens to swap each time
-// If no amount is provided, it's set to zero
-// If amount is not zero, then exactly this amount of tokens (USDT or USDC)
-// will be swapped each time
-// If amount is zero, then the whole user's balance of USDT and USDC
-// will be swapped each time
-const AMOUNT =
-  process.env.AMOUNT === ""
-    ? parseUnits("0", 6)
-    : parseUnits(process.env.AMOUNT, 6);
-// Check that amount is not negative
-if (AMOUNT.toNumber() < 0) {
-  throw "Swap amount can not be a negative integer!";
-}
-// The maximum allowed difference in token prices before and after the swap (in *percents*)
-// e.g. 10 = 10%; If after the swap the price of USDT decreases by 11 - cancel the swap.
-// (price difference is checked *before* the actual swap)
-// (the more USDTs are transferred into the pool, the lower the price of USDT gets)
-// If no value is provided by the user, 1% is set as a default value
-const MAX_PRICE_CHANGE = process.env.MAX_PRICE_CHANGE || 1;
-// Check that max price change is greater than zero
-// It can't be zero because *any* deposit will change the price
-if (!(MAX_PRICE_CHANGE > 0)) {
-  throw "Maximum price change should be greater than 0!";
-}
-// How many times to increment the "market" gas price to mine the transaction faster
-// If no value is provided, x2 is set as default
-const GAS_MULTIPLIER = process.env.GAS_MULTIPLIER || 2;
-// Check that gas price multiplier is not 0
-// It can be less than 1 and that will slow down the transaction being mined
-if (GAS_MULTIPLIER <= 0) {
-  throw "Gas price multiplier should be greater than 0!";
-}
-// The address of main UniswapV2Router02 deployed and used on Ultron mainnet
-const ROUTER_ADDRESS = "0x2149Ca7a3e4098d6C4390444769DA671b4dC3001";
-// Addresses of uUSDT and uUSDC
-const USDT_ADDRESS = "0x97fdd294024f50c388e39e73f1705a35cfe87656";
-const USDC_ADDRESS = "0x3c4e0fded74876295ca36f62da289f69e3929cc4";
-// The address of main USDT/USDC pair pool deployed and used on Ultron mainnet
-const PAIR_ADDRESS = "0x5910306486d3adF0f2ec3146A8C38e6C1F3404b7";
-// The timeout for transactions
-const TIMEOUT = Date.now() + 1000 * 60 * 10;
-// The amount of tokens used to get token's price
-// NOTE The closer this amount is to the amount that will be deposited (user's balance, for example)
-// the less will be the difference between non-optimal amount (balance) and optimal amount (calculated with formula)
-const AMOUNT_FOR_PRICE = parseUnits("1", 6);
-// The directions of the swap
+// All global variables used in the functions below
+let SWAP_THRESHOLD;
+let AMOUNT;
+let MAX_PRICE_CHANGE;
+let GAS_MULTIPLIER;
+let ROUTER_ADDRESS;
+let USDT_ADDRESS;
+let USDC_ADDRESS;
+let PAIR_ADDRESS;
+let TIMEOUT;
+let AMOUNT_FOR_PRICE;
+let pair;
+let provider;
+let wallet;
+let router;
+let USDT;
+let USDC;
+let lastSwapDirection;
+let amountTokenDesired;
+let ULX_ADDRESS;
+
 const SwapDirection = {
   USDT: "USDT", // USDC -> USDT
   USDC: "USDC", // USDT -> USDC
 };
-
 // Allows to create a queue of promises and resolve them one by one
 class Queue {
   // Initially, that's a single resolved promise
@@ -83,14 +57,39 @@ class Queue {
   }
 }
 
-let pair;
-let provider;
-let wallet;
-let router;
-let USDT;
-let USDC;
-let queue = new Queue();
-let lastSwapDirection;
+// Initialize all global variables in an async manner
+async function init() {
+  // These values are hard-coded to provide the same conditions at each run
+  // of tests
+  SWAP_THRESHOLD = "1.001";
+  AMOUNT = parseUnits("4", 6);
+  MAX_PRICE_CHANGE = "1";
+  GAS_MULTIPLIER = "4";
+  ROUTER_ADDRESS = "0x2149Ca7a3e4098d6C4390444769DA671b4dC3001";
+  USDT_ADDRESS = "0x97fdd294024f50c388e39e73f1705a35cfe87656";
+  USDC_ADDRESS = "0x3c4e0fded74876295ca36f62da289f69e3929cc4";
+  PAIR_ADDRESS = "0x5910306486d3adF0f2ec3146A8C38e6C1F3404b7";
+  TIMEOUT = Date.now() + 1000 * 60 * 10;
+  AMOUNT_FOR_PRICE = parseUnits("1", 6);
+  amountTokenDesired = parseUnits("2", 6);
+  provider = ethers.provider;
+  let wallets = await ethers.getSigners();
+  wallet = wallets[0];
+  pair = await getContractAt("UniswapV2Pair", PAIR_ADDRESS, wallet);
+  USDT = await getContractAt("USDX", USDT_ADDRESS, wallet);
+  USDC = await getContractAt("USDX", USDC_ADDRESS, wallet);
+  router = await getContractAt("UniswapV2Router02", ROUTER_ADDRESS, wallet);
+  ULX_ADDRESS = await router.WETH();
+}
+
+
+
+
+// ================================================================
+// Copy of all function from main.js
+// To keep tests up-to-date, you have to **copy here** all changes you
+// make inside `main.js`
+
 
 // Returns the price of USDC in the pool (pair)
 async function getPriceUSDC() {
@@ -201,7 +200,7 @@ async function checkBalance(token, amount) {
   return true;
 }
 
-// Finds an optimal amount of tokens to deposit
+// Finds an amount of tokens to deposit
 // Optimal amount is the amount that after being deposited into the pool will
 // not change the price of deposited tokens for more percents than expected
 // Returns an amounts as BigNumber
@@ -416,38 +415,6 @@ async function listenAndSwap() {
   console.log(`Max price change is: ${MAX_PRICE_CHANGE}%`);
   console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
-  // If the network is not Ultron - get the default provider for the specified network
-  if (network.name != "ultronMainnet") {
-    provider = ethers.provider;
-  } else {
-    // Provider for Ultron mainnet
-    provider = new ethers.providers.JsonRpcProvider("https://ultron-rpc.net");
-  }
-
-  // Initialize user's wallet depending on the chosen network
-  if (network.name != "ultronMainnet") {
-    // Get default hardhat signers
-    wallets = await ethers.getSigners();
-    wallet = wallets[0];
-  } else {
-    wallet = new ethers.Wallet(ACC_PRIVATE_KEY, provider);
-  }
-
-  // Initialize the pair contract
-  // Order of tokens: USDC - USDT
-  pair = await getContractAt("UniswapV2Pair", PAIR_ADDRESS, wallet);
-  console.log("Pair address is ", pair.address);
-
-  // Initialize the USDT and USDC contracts
-  // Both inherit from ERC20PresetMinterPauser
-  USDT = await getContractAt("USDX", USDT_ADDRESS, wallet);
-  USDC = await getContractAt("USDX", USDC_ADDRESS, wallet);
-  // Initialize the Router contract
-  router = await getContractAt("UniswapV2Router02", ROUTER_ADDRESS, wallet);
-  console.log("USDT address is ", USDT.address);
-  console.log("USDC address is ", USDC.address);
-  await showWalletBalance();
-
   console.log("\nListening for pool events...");
 
   pair.on("Mint", () => {
@@ -478,6 +445,112 @@ async function listenAndSwap() {
   });
 }
 
-if (require.main === module) {
-  listenAndSwap();
-}
+
+// ================================================================
+// Start of tests
+
+
+
+// NOTE: All values that are compared to function results were
+// calculcated by hand. That was possible because of the exact known 
+// state of the Ultron fork and a set of constant variables (i.e. tests run the same each time) 
+
+// NOTE: These tests include swaps. That is why you have to **restart** your chain node
+// after each run of tests in order for them to work correctly
+describe("Phoenix bot", () => {
+  
+  before(async () => {
+    await init();
+    // Buy some USDC and USDT for the user
+    let path = [ULX_ADDRESS, USDT.address];
+    let txResponse = await router.connect(wallet).swapExactETHForTokens(
+      amountTokenDesired,
+      path,
+      wallet.address,
+      TIMEOUT,
+      // 1 ULX ~= 0.06 USDT in fork
+      { value: parseEther("100") }
+    );
+    let txReceipt = await txResponse.wait();
+    path = [ULX_ADDRESS, USDC.address];
+    txResponse = await router.connect(wallet).swapExactETHForTokens(
+      amountTokenDesired,
+      path,
+      wallet.address,
+      TIMEOUT,
+      // 1 ULX ~= 0.06 USDT in fork
+      { value: parseEther("100") }
+    );
+    txReceipt = await txResponse.wait();
+  });
+  
+  it("Calculate USDC price correctly", async () => {
+    // Calculated by hand
+    let expectedAmount = FixedNumber.from("1001938");
+    let realAmount = await getPriceUSDC();
+    expect(realAmount.toUnsafeFloat()).to.eq(expectedAmount.toUnsafeFloat());
+  });
+  
+  it("Calculate USDT price correctly", async () => {
+    // Calculated by hand
+    let expectedAmount = FixedNumber.from("992085");
+    let realAmount = await getPriceUSDT();
+    expect(realAmount.toUnsafeFloat()).to.eq(expectedAmount.toUnsafeFloat());
+  });
+
+  it("Should find the more expensive token correctly", async () => {
+    expect(await USDTMoreExpensive()).to.eq(false);
+  });
+
+  it("Should check that threshold was reached", async () => {
+    expect(await checkThreshold()).to.eq(true);
+  });
+
+
+  it("Should swap two tokens", async () => {
+    let startUsdtBalance = await USDT.balanceOf(pair.address);
+    let startUsdcBalance = await USDC.balanceOf(pair.address);
+    littleAmount = parseUnits("1", 6);
+    // Approve a swap
+    let approveTx = await USDT.connect(wallet).approve(
+      router.address,
+      littleAmount,
+    );
+    await approveTx.wait();
+    // Make a swap
+    await swap(USDT.address, USDC.address, littleAmount); 
+    let endUsdtBalance = await USDT.balanceOf(pair.address);
+    let endUsdcBalance = await USDC.balanceOf(pair.address);
+    // User deposited USDT into the pool
+    expect(endUsdtBalance).to.gt(startUsdtBalance);
+    // Uset withdrawn USDC from the pool
+    expect(endUsdcBalance).to.lt(startUsdcBalance);
+  });
+
+
+
+  it("Check that wallet does not have enough tokens", async () => {
+    // User has 0 USDT
+    expect(await checkBalance(USDT, parseUnits("1000", 6))).to.eq(false)
+  });
+
+  it("Should calculate the optimal amount correctly", async () => {
+    // Calculated by hand
+    let expectedAmount = BigNumber.from("3388339801");
+    let realAmount = await findOptimalAmount(USDT);
+    expect(realAmount).to.eq(expectedAmount);
+  });
+
+  it("Check that USDC is more expensive and swap USDC -> USDT", async () => {
+    let startUsdtBalance = await USDT.balanceOf(pair.address);
+    let startUsdcBalance = await USDC.balanceOf(pair.address);
+    littleAmount = parseUnits("1", 6);
+    await comparePricesAndSwap(littleAmount);
+    let endUsdtBalance = await USDT.balanceOf(pair.address);
+    let endUsdcBalance = await USDC.balanceOf(pair.address);
+    // User deposited USDT into the pool
+    expect(endUsdtBalance).to.lt(startUsdtBalance);
+    // Uset withdrawn USDC from the pool
+    expect(endUsdcBalance).to.gt(startUsdcBalance);
+  });
+});
