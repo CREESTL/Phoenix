@@ -1,5 +1,6 @@
 const { ethers, network } = require("hardhat");
 const fs = require("fs");
+const util = require("util");
 const path = require("path");
 require("dotenv").config();
 const delay = require("delay");
@@ -7,6 +8,17 @@ const { formatEther, parseEther, parseUnits, formatUnits, keccak256 } =
   ethers.utils;
 const { getContractFactory, getContractAt, BigNumber, FixedNumber } = ethers;
 module.exports = {listenAndSwap};
+
+
+// Log both into console and log file
+let logFile = fs.createWriteStream("log.txt", {flags: 'w'});
+let logStdOut = process.stdout;
+
+console.log = function() {
+  logFile.write(util.format.apply(null, arguments) + "\n");
+  logStdOut.write(util.format.apply(null, arguments) + "\n");
+}
+
 
 // Note that most of operations with numbers(in functions) are done using FixedNumber lib to be able to
 // make floating point divisions (BigNumber does not allow this)

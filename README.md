@@ -248,4 +248,5 @@ In all above examples "**Mint**" event could be replaced with "**Swap**" or "**B
 
 In all above examples if the price difference of tokens was less than 1.5, the swap would have been cancelled.
 
+All logs produced by the bot are saved into `log.txt` file. File gets rewritten each time the bot start working.  
 
