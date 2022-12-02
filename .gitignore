@@ -11,3 +11,5 @@ artifacts
 
 *.env
 package-lock.json
+
+log.txt
