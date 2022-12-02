@@ -168,12 +168,12 @@ async function checkThreshold() {
 // First token (from) is the more expensive one
 // Second token (to) is the less expensive one
 async function swap(from, to, amount) {
-  console.log(`Swap amount is ${formatUnits(amount, 6)}`);
   let path = [from, to];
   // Get the current gas price
   let gasPrice = await wallet.getGasPrice();
   // Multiply current gas price for the provided multyplier amount
   let newGasPrice = gasPrice.mul(GAS_MULTIPLIER);
+  console.log(`Swapping ${formatUnits(amount, 6)} tokens...`);
   await router
     .connect(wallet)
     .swapExactTokensForTokens(amount, 1, path, wallet.address, TIMEOUT, {
@@ -184,6 +184,7 @@ async function swap(from, to, amount) {
   } else if (to == USDT.address) {
     lastSwapDirection = SwapDirection.USDT;
   }
+  console.log("Swap finished!");
 }
 
 // Shows USDT and USDC balances of the user
@@ -214,10 +215,10 @@ async function checkBalance(token, amount) {
 }
 
 // Finds an optimal amount of tokens to deposit
-// Optimal amount is the amount that after being deposited into the pool will
-// not change the price of deposited tokens for more percents than expected
+// Optimal amount is the amount that after being deposited into the pool will not change the price of deposited tokens for more percents than expected
 // Returns an amounts as BigNumber
 async function findOptimalAmount(token) {
+  console.log(`Calculating an optimal amount of ${await token.name()}...`);
   let [usdcReserve, usdtReserve, timestamp] = await pair.getReserves();
   // Choose wich token we're working with
   let currentReserveIn =
@@ -237,11 +238,16 @@ async function findOptimalAmount(token) {
   );
   // The maximum  reserveIn that will not change the price for more than MAX_PRICE_CHANGE percents
   let maxReserveIn = numerator.divUnsafe(denominator);
+  console.log(`\tnumerator: ${numerator.toUnsafeFloat()}`);
+  console.log(`\tdenominator: ${denominator.toUnsafeFloat()}`);
+  console.log(`\tmaximum *reserve* of ${await token.name()} to be deposted without price change: ${maxReserveIn.toUnsafeFloat()}`);
+  console.log(`\tcurrent *reserve* of ${await token.name()} in the pool: ${currentReserveIn.toUnsafeFloat()}`);
   // The maximum amount of input token to deposit into the pool for the price to change not more than for MAX_PRICE_CHANGE percents
   let maxAmount = maxReserveIn.subUnsafe(currentReserveIn);
   // Now maxAmount is a form of a float number like `3337.8920380...`
   // We need to only use the integer part (before ".")
   maxAmount = maxAmount.toString().split(".")[0];
+  console.log(`\tmaximum *amount* to be deposted without price change: ${maxAmount}`);
   // Convert it back to BigNumber
   maxAmount = BigNumber.from(maxAmount);
   return maxAmount;
@@ -265,14 +271,16 @@ async function comparePricesAndSwap(amount) {
     return;
   }
 
+  console.log("Comparing prices of tokens...");
+
   // Swap USDT -> USDC if USDT is more expensive
   if (await USDTMoreExpensive()) {
     console.log("USDT is more expensive");
-    console.log("Swapping: USDT -> USDC");
+    console.log("Swapping: USDT -> USDC...");
 
     // If the last swap was USDT -> USDC, there is no need to do another one
     if (lastSwapDirection == SwapDirection.USDC) {
-      console.log("Last swap was USDT -> USDC already. Cancel the swap...");
+      console.log("Last swap was USDT -> USDC already. Cancel the swap!");
       return;
     }
 
@@ -297,12 +305,15 @@ async function comparePricesAndSwap(amount) {
         return;
       }
 
+      console.log(`Approving transfer of ${formatUnits(amount, 6)} USDT from the wallet...`);
       // Approve the transfer of swapped tokens from user to the pool
       let approveTx = await USDT.connect(wallet).approve(
         router.address,
         amount
       );
       await approveTx.wait();
+      console.log("Transfer approved!");
+
       // Make a swap
       await swap(USDT.address, USDC.address, amount);
 
@@ -330,12 +341,15 @@ async function comparePricesAndSwap(amount) {
         );
       }
 
+      console.log(`Approving transfer of ${formatUnits(balance, 6)} USDT from the wallet...`);
       // Approve the transfer of swapped tokens from user to the pool
       let approveTx = await USDT.connect(wallet).approve(
         router.address,
         balance
       );
       await approveTx.wait();
+      console.log("Transfer approved!");
+
       // Make a swap
       await swap(USDT.address, USDC.address, balance);
     }
@@ -343,14 +357,14 @@ async function comparePricesAndSwap(amount) {
     // Swap USDC -> USDT if USDC is more expensive
   } else {
     console.log("USDC is more expensive");
-    console.log("Swapping: USDC -> USDT");
+    console.log("Swapping: USDC -> USDT...");
 
     // Find the optimal amount for that swap
     optimalAmount = await findOptimalAmount(USDC);
 
     // If the last swap was USDC -> USDT, there is no need to do another one
     if (lastSwapDirection == SwapDirection.USDT) {
-      console.log("Last swap was USDC -> USDT already. Cancel the swap...");
+      console.log("Last swap was USDC -> USDT already. Cancel the swap!");
       return;
     }
 
@@ -372,12 +386,15 @@ async function comparePricesAndSwap(amount) {
         return;
       }
 
+      console.log(`Approving transfer of ${formatUnits(amount, 6)} USDC from the wallet...`);
       // Approve the transfer of swapped tokens from user to the pool
       let approveTx = await USDC.connect(wallet).approve(
         router.address,
         amount
       );
       await approveTx.wait();
+      console.log("Transfer approved!");
+
       // Make a swap
       await swap(USDC.address, USDT.address, amount);
 
@@ -404,18 +421,20 @@ async function comparePricesAndSwap(amount) {
         );
       }
 
+      console.log(`Approving transfer of ${formatUnits(balance, 6)} USDC from the wallet...`);
       // Approve the transfer of swapped tokens from user to the pool
       let approveTx = await USDC.connect(wallet).approve(
         router.address,
         balance
       );
       await approveTx.wait();
+      console.log("Transfer approved!");
+
       // Make a swap
       await swap(USDC.address, USDT.address, balance);
     }
   }
 
-  console.log("Swap Finished!");
   await showWalletBalance();
 }
 
@@ -444,6 +463,8 @@ async function listenAndSwap() {
   } else {
     wallet = new ethers.Wallet(ACC_PRIVATE_KEY, provider);
   }
+
+  console.log(`Using wallet: ${wallet.address}`);
 
   // Initialize the pair contract
   // Order of tokens: USDC - USDT
@@ -491,5 +512,9 @@ async function listenAndSwap() {
 }
 
 if (require.main === module) {
-  listenAndSwap();
+  listenAndSwap()
+  .catch(error => {
+    console.error(error);
+    process.exit(1);
+  });
 }
