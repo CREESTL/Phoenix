@@ -207,6 +207,7 @@ async function showWalletBalance() {
 // Returns true if user has enough tokens
 // Return false if user does not have enough tokens
 async function checkBalance(token, amount) {
+  console.log(`Checking if user has ${formatUnits(amount.toString(), 6)} of ${await token.name()}...`);
   let balance = await token.balanceOf(wallet.address);
   if (balance.lt(amount)) {
     return false;
@@ -240,14 +241,14 @@ async function findOptimalAmount(token) {
   let maxReserveIn = numerator.divUnsafe(denominator);
   console.log(`\tnumerator: ${numerator.toUnsafeFloat()}`);
   console.log(`\tdenominator: ${denominator.toUnsafeFloat()}`);
-  console.log(`\tmaximum *reserve* of ${await token.name()} to be deposted without price change: ${maxReserveIn.toUnsafeFloat()}`);
-  console.log(`\tcurrent *reserve* of ${await token.name()} in the pool: ${currentReserveIn.toUnsafeFloat()}`);
+  console.log(`\tmaximum *reserve* of ${await token.name()} to be deposted without price change: ${formatUnits(BigNumber.from(maxReserveIn.toString().split(".")[0]), 6)}`);
+  console.log(`\tcurrent *reserve* of ${await token.name()} in the pool: ${formatUnits(BigNumber.from(currentReserveIn.toString().split(".")[0]), 6)}`);
   // The maximum amount of input token to deposit into the pool for the price to change not more than for MAX_PRICE_CHANGE percents
   let maxAmount = maxReserveIn.subUnsafe(currentReserveIn);
   // Now maxAmount is a form of a float number like `3337.8920380...`
   // We need to only use the integer part (before ".")
   maxAmount = maxAmount.toString().split(".")[0];
-  console.log(`\tmaximum *amount* to be deposted without price change: ${maxAmount}`);
+  console.log(`\tmaximum *amount* to be deposted without price change: ${formatUnits(BigNumber.from(maxAmount.toString().split(".")[0]), 6)}`);
   // Convert it back to BigNumber
   maxAmount = BigNumber.from(maxAmount);
   return maxAmount;
@@ -276,7 +277,7 @@ async function comparePricesAndSwap(amount) {
   // Swap USDT -> USDC if USDT is more expensive
   if (await USDTMoreExpensive()) {
     console.log("USDT is more expensive");
-    console.log("Swapping: USDT -> USDC...");
+    console.log("Trying to swap USDT -> USDC...");
 
     // If the last swap was USDT -> USDC, there is no need to do another one
     if (lastSwapDirection == SwapDirection.USDC) {
@@ -357,7 +358,7 @@ async function comparePricesAndSwap(amount) {
     // Swap USDC -> USDT if USDC is more expensive
   } else {
     console.log("USDC is more expensive");
-    console.log("Swapping: USDC -> USDT...");
+    console.log("Trying to swap USDC -> USDT...");
 
     // Find the optimal amount for that swap
     optimalAmount = await findOptimalAmount(USDC);
@@ -481,6 +482,12 @@ async function listenAndSwap() {
   console.log("USDC address is ", USDC.address);
   await showWalletBalance();
 
+  // Check if it's possible to make a swap right now without 
+  // waiting for events
+  console.log("\nChecking if it's possible to make a swap right now...")
+  await comparePricesAndSwap(AMOUNT);
+
+  // Listen for events that change pool tokens' prices
   console.log("\nListening for pool events...");
 
   pair.on("Mint", () => {
