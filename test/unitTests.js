@@ -415,6 +415,11 @@ async function listenAndSwap() {
   console.log(`Max price change is: ${MAX_PRICE_CHANGE}%`);
   console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
+  // Check if it's possible to make a swap right now without 
+  // waiting for events
+  console.log("\nChecking if it's possible to make a swap right now...")
+  await comparePricesAndSwap(AMOUNT);
+
   console.log("\nListening for pool events...");
 
   pair.on("Mint", () => {
