@@ -147,8 +147,11 @@ async function USDTMoreExpensive() {
 // Returns true if it was reached
 // Returns false if it was not reached
 async function checkThreshold() {
+  console.log("Checking prices ratio...");
   let usdtPrice = await getPriceUSDT();
   let usdcPrice = await getPriceUSDC();
+  console.log(`\tPrices ratio №1 is: ${usdtPrice.divUnsafe(usdcPrice).toUnsafeFloat()}`);
+  console.log(`\tPrices ratio №2 is: ${usdcPrice.divUnsafe(usdtPrice).toUnsafeFloat()}`);
   let threshold = FixedNumber.from(SWAP_THRESHOLD);
   if (
     // Convert FixedNumber to float to make a comparison
@@ -271,6 +274,8 @@ async function comparePricesAndSwap(amount) {
     console.log("Swap threshold was not reached yet!");
     return;
   }
+
+  console.log("Swap threshold has been reached!");
 
   console.log("Comparing prices of tokens...");
 
