@@ -296,9 +296,8 @@ async function comparePricesAndSwap(amount) {
 
     // Find the optimal amount for that swap
     optimalAmount = await findOptimalAmount(USDT);
-
     // User wants to swap an exact amount of tokens
-    if (amount != parseUnits(0, 6)) {
+    if (!(amount.eq(parseUnits("0", 6)))) {
       // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDT, amount))) {
         console.log("User has not enough tokens to swap!");
@@ -379,7 +378,7 @@ async function comparePricesAndSwap(amount) {
     }
 
     // User wants to swap an exact amount of tokens
-    if (amount != 0) {
+    if (!(amount.eq(parseUnits("0", 6)))) {
       // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDC, amount))) {
         console.log("User has not enough tokens to swap!");
