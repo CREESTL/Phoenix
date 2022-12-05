@@ -30,7 +30,7 @@ const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
 const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD || 1.5;
 // Check that threshold if greater than 1
 if (!(SWAP_THRESHOLD > 1)) {
-  throw "Swap threshold should be a greater than 1!";
+  throw "\n[ERROR] Swap threshold should be a greater than 1!";
 }
 // The amount of tokens to swap each time
 // If no amount is provided, it's set to zero
@@ -44,7 +44,7 @@ const AMOUNT =
     : parseUnits(process.env.AMOUNT, 6);
 // Check that amount is not negative
 if (AMOUNT.toNumber() < 0) {
-  throw "Swap amount can not be a negative integer!";
+  throw "\n[ERROR] Swap amount can not be a negative integer!";
 }
 // The maximum allowed difference in token prices before and after the swap (in *percents*)
 // e.g. 10 = 10%; If after the swap the price of USDT decreases by 11 - cancel the swap.
@@ -55,7 +55,7 @@ const MAX_PRICE_CHANGE = process.env.MAX_PRICE_CHANGE || 1;
 // Check that max price change is greater than zero
 // It can't be zero because *any* deposit will change the price
 if (!(MAX_PRICE_CHANGE > 0)) {
-  throw "Maximum price change should be greater than 0!";
+  throw "\n[ERROR] Maximum price change should be greater than 0!";
 }
 // How many times to increment the "market" gas price to mine the transaction faster
 // If no value is provided, x2 is set as default
@@ -63,7 +63,7 @@ const GAS_MULTIPLIER = process.env.GAS_MULTIPLIER || 2;
 // Check that gas price multiplier is not 0
 // It can be less than 1 and that will slow down the transaction being mined
 if (GAS_MULTIPLIER <= 0) {
-  throw "Gas price multiplier should be greater than 0!";
+  throw "\n[ERROR] Gas price multiplier should be greater than 0!";
 }
 // The address of main UniswapV2Router02 deployed and used on Ultron mainnet
 const ROUTER_ADDRESS = "0x2149Ca7a3e4098d6C4390444769DA671b4dC3001";
@@ -210,6 +210,10 @@ async function showWalletBalance() {
 // Returns true if user has enough tokens
 // Return false if user does not have enough tokens
 async function checkBalance(token, amount) {
+  // If user's balance is 0, stop the bot
+  if (amount.eq(0)) {
+    throw `\n[ERROR] Wallet's ${await token.name()} balance is 0! Please provide the wallet with some tokens and restart the bot!`;
+  }
   console.log(`Checking if user has ${formatUnits(amount.toString(), 6)} of ${await token.name()}...`);
   let balance = await token.balanceOf(wallet.address);
   if (balance.lt(amount)) {
