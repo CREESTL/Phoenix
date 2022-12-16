@@ -2,6 +2,8 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^2.0.0",
     "hardhat": "^2.12.2",
+    "mathjs": "^11.5.0",
+    "nerdamer": "^1.1.13",
     "prettier": "^2.7.1",
     "prettier-plugin-solidity": "^1.0.0-rc.1"
   },
