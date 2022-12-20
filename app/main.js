@@ -25,38 +25,6 @@ console.log = function() {
 
 // The private key of the user
 const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
-// The USDC/USDT (or USDC/USDT) price ratio enough to trigger the swap
-// If no value was provided by the user, it's set to 1.5
-const SWAP_THRESHOLD = process.env.SWAP_THRESHOLD || 1.5;
-// Check that threshold if greater than 1
-if (!(SWAP_THRESHOLD > 1)) {
-  throw "Swap threshold should be a greater than 1!";
-}
-// The amount of tokens to swap each time
-// If no amount is provided, it's set to zero
-// If amount is not zero, then exactly this amount of tokens (USDT or USDC)
-// will be swapped each time
-// If amount is zero, then the whole user's balance of USDT and USDC
-// will be swapped each time
-const AMOUNT =
-  process.env.AMOUNT === ""
-    ? parseUnits("0", 6)
-    : parseUnits(process.env.AMOUNT, 6);
-// Check that amount is not negative
-if (AMOUNT.toNumber() < 0) {
-  throw "Swap amount can not be a negative integer!";
-}
-// The maximum allowed difference in token prices before and after the swap (in *percents*)
-// e.g. 10 = 10%; If after the swap the price of USDT decreases by 11 - cancel the swap.
-// (price difference is checked *before* the actual swap)
-// (the more USDTs are transferred into the pool, the lower the price of USDT gets)
-// If no value is provided by the user, 1% is set as a default value
-const MAX_PRICE_CHANGE = process.env.MAX_PRICE_CHANGE || 1;
-// Check that max price change is greater than zero
-// It can't be zero because *any* deposit will change the price
-if (!(MAX_PRICE_CHANGE > 0)) {
-  throw "Maximum price change should be greater than 0!";
-}
 // How many times to increment the "market" gas price to mine the transaction faster
 // If no value is provided, x2 is set as default
 const GAS_MULTIPLIER = process.env.GAS_MULTIPLIER || 2;
@@ -131,35 +99,14 @@ async function getPriceUSDT() {
 async function USDTMoreExpensive() {
   let usdtPrice = await getPriceUSDT();
   let usdcPrice = await getPriceUSDC();
-  let threshold = FixedNumber.from(SWAP_THRESHOLD);
   console.log("USDT price is: ", formatUnits(usdtPrice.toUnsafeFloat(), 6));
   console.log("USDC price is: ", formatUnits(usdcPrice.toUnsafeFloat(), 6));
   if (
-    usdtPrice.toUnsafeFloat() >= usdcPrice.mulUnsafe(threshold).toUnsafeFloat()
+    usdtPrice.toUnsafeFloat() >= usdcPrice.toUnsafeFloat()
   ) {
     return true;
   }
 
-  return false;
-}
-
-// Checks if swap threshold was reached
-// Returns true if it was reached
-// Returns false if it was not reached
-async function checkThreshold() {
-  let usdtPrice = await getPriceUSDT();
-  let usdcPrice = await getPriceUSDC();
-  let threshold = FixedNumber.from(SWAP_THRESHOLD);
-  if (
-    // Convert FixedNumber to float to make a comparison
-    // USDT is more expensive
-    usdtPrice.toUnsafeFloat() >=
-      usdcPrice.mulUnsafe(threshold).toUnsafeFloat() ||
-    // USDC is more expensive
-    usdcPrice.toUnsafeFloat() >= usdtPrice.mulUnsafe(threshold).toUnsafeFloat()
-  ) {
-    return true;
-  }
   return false;
 }
 
@@ -215,45 +162,6 @@ async function checkBalance(token, amount) {
   return true;
 }
 
-// Finds an optimal amount of tokens to deposit
-// Optimal amount is the amount that after being deposited into the pool will not change the price of deposited tokens for more percents than expected
-// Returns an amounts as BigNumber
-async function findOptimalAmount(token) {
-  console.log(`Calculating an optimal amount of ${await token.name()}...`);
-  let [usdcReserve, usdtReserve, timestamp] = await pair.getReserves();
-  // Choose wich token we're working with
-  let currentReserveIn =
-    token.address == USDC.address ? usdcReserve : usdtReserve;
-  // Convert all values to FixedNumbers
-  currentReserveIn = FixedNumber.from(currentReserveIn);
-  maxPriceChange = FixedNumber.from(MAX_PRICE_CHANGE);
-  amountForPrice = FixedNumber.from(AMOUNT_FOR_PRICE);
-  // In the next 3 lines the math magic happens. This formula was derived specifically for this case
-  let numerator = FixedNumber.from(100_000)
-    .mulUnsafe(currentReserveIn)
-    .addUnsafe(
-      FixedNumber.from(997).mulUnsafe(maxPriceChange).mulUnsafe(amountForPrice)
-    );
-  let denominator = FixedNumber.from(1000).mulUnsafe(
-    FixedNumber.from(100).subUnsafe(maxPriceChange)
-  );
-  // The maximum  reserveIn that will not change the price for more than MAX_PRICE_CHANGE percents
-  let maxReserveIn = numerator.divUnsafe(denominator);
-  console.log(`\tnumerator: ${numerator.toUnsafeFloat()}`);
-  console.log(`\tdenominator: ${denominator.toUnsafeFloat()}`);
-  console.log(`\tmaximum *reserve* of ${await token.name()} to be deposted without price change: ${formatUnits(BigNumber.from(maxReserveIn.toString().split(".")[0]), 6)}`);
-  console.log(`\tcurrent *reserve* of ${await token.name()} in the pool: ${formatUnits(BigNumber.from(currentReserveIn.toString().split(".")[0]), 6)}`);
-  // The maximum amount of input token to deposit into the pool for the price to change not more than for MAX_PRICE_CHANGE percents
-  let maxAmount = maxReserveIn.subUnsafe(currentReserveIn);
-  // Now maxAmount is a form of a float number like `3337.8920380...`
-  // We need to only use the integer part (before ".")
-  maxAmount = maxAmount.toString().split(".")[0];
-  console.log(`\tmaximum *amount* to be deposted without price change: ${formatUnits(BigNumber.from(maxAmount.toString().split(".")[0]), 6)}`);
-  // Convert it back to BigNumber
-  maxAmount = BigNumber.from(maxAmount);
-  return maxAmount;
-}
-
 // Compares prices of USDC and USDT tokens in the pool and
 // swaps one token for another one
 // If `amount` is not zero, then exactly the `amount` of tokens (USDT or USDC)
@@ -263,14 +171,6 @@ async function findOptimalAmount(token) {
 // Notice that `amount` has decimals = 6
 async function comparePricesAndSwap(amount) {
   await showWalletBalance();
-  let optimalAmount;
-
-  // Check if threshold was reached
-  // If not - do not swap tokens
-  if (!(await checkThreshold())) {
-    console.log("Swap threshold was not reached yet!");
-    return;
-  }
 
   console.log("Comparing prices of tokens...");
 
@@ -285,24 +185,11 @@ async function comparePricesAndSwap(amount) {
       return;
     }
 
-    // Find the optimal amount for that swap
-    optimalAmount = await findOptimalAmount(USDT);
-
     // User wants to swap an exact amount of tokens
     if (amount != parseUnits(0, 6)) {
       // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDT, amount))) {
         console.log("User has not enough tokens to swap!");
-        return;
-      }
-
-      // Swap is impossible if price will change too much
-      if (amount.gt(optimalAmount)) {
-        console.log("The swap will affect price too much. Cancel swap!");
-        // Suggest the user to either now provide any amount, or decrease it
-        console.log(
-          "Decrease the amount to swap you have provided OR do not provide it at all!"
-        );
         return;
       }
 
@@ -329,19 +216,6 @@ async function comparePricesAndSwap(amount) {
         return;
       }
 
-      // Swap is impossible if price will change too much
-      if (balance.gt(optimalAmount)) {
-        console.log("The swap will affect price too much. Cancel swap!");
-        // Use the optimal amount instead of user's balance in that case
-        balance = optimalAmount;
-        console.log(
-          `Using an optimal amount of ${formatUnits(
-            balance,
-            6
-          )} to make a swap.`
-        );
-      }
-
       console.log(`Approving transfer of ${formatUnits(balance, 6)} USDT from the wallet...`);
       // Approve the transfer of swapped tokens from user to the pool
       let approveTx = await USDT.connect(wallet).approve(
@@ -360,9 +234,6 @@ async function comparePricesAndSwap(amount) {
     console.log("USDC is more expensive");
     console.log("Trying to swap USDC -> USDT...");
 
-    // Find the optimal amount for that swap
-    optimalAmount = await findOptimalAmount(USDC);
-
     // If the last swap was USDC -> USDT, there is no need to do another one
     if (lastSwapDirection == SwapDirection.USDT) {
       console.log("Last swap was USDC -> USDT already. Cancel the swap!");
@@ -374,16 +245,6 @@ async function comparePricesAndSwap(amount) {
       // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDC, amount))) {
         console.log("User has not enough tokens to swap!");
-        return;
-      }
-
-      // Swap is impossible if price will change too much
-      if (amount.gt(optimalAmount)) {
-        console.log("The swap will affect price too much. Cancel swap!");
-        // Suggest the user to either now provide any amount, or decrease it
-        console.log(
-          "Decrease the amount to swap you have provided OR do not provide it at all!"
-        );
         return;
       }
 
@@ -409,18 +270,6 @@ async function comparePricesAndSwap(amount) {
         console.log("User has not enough tokens to swap!");
         return;
       }
-      // Swap is impossible if price will change too much
-      if (balance.gt(optimalAmount)) {
-        console.log("The swap will affect price too much. Cancel swap!");
-        // Use the optimal amount instead of user's balance in that case
-        balance = optimalAmount;
-        console.log(
-          `Using an optimal amount of ${formatUnits(
-            balance,
-            6
-          )} to make a swap.`
-        );
-      }
 
       console.log(`Approving transfer of ${formatUnits(balance, 6)} USDC from the wallet...`);
       // Approve the transfer of swapped tokens from user to the pool
@@ -441,11 +290,12 @@ async function comparePricesAndSwap(amount) {
 
 // Main farming function
 async function listenAndSwap() {
+  //PLACEHOLDER VALUE
+  //TODO: WE NEED TO CALCULATE OPTIMAL AMOUNT FOR A SWAP
+  let amount = parseUnits("1", 6);
   console.log("\n\n\n\n===========\nSTART BOT");
   console.log(`\nCurrent chain is: ${network.name}`);
-  console.log(`Swap threshold is: ${SWAP_THRESHOLD}`);
-  console.log(`Amount to swap is: ${formatUnits(AMOUNT, 6)}`);
-  console.log(`Max price change is: ${MAX_PRICE_CHANGE}%`);
+  console.log(`Amount to swap is: ${formatUnits(amount, 6)}`);
   console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
   // If the network is not Ultron - get the default provider for the specified network
@@ -485,7 +335,7 @@ async function listenAndSwap() {
   // Check if it's possible to make a swap right now without 
   // waiting for events
   console.log("\nChecking if it's possible to make a swap right now...")
-  await comparePricesAndSwap(AMOUNT);
+  await comparePricesAndSwap(amount);
 
   // Listen for events that change pool tokens' prices
   console.log("\nListening for pool events...");
@@ -493,14 +343,14 @@ async function listenAndSwap() {
   pair.on("Mint", () => {
     console.log("\nLiquidity has been added to the pool!");
     queue.add(async () => {
-      await comparePricesAndSwap(AMOUNT);
+      await comparePricesAndSwap(amount);
     });
   });
 
   pair.on("Burn", () => {
     console.log("\nLiquidity has been withdrawn from the pool!");
     queue.add(async () => {
-      await comparePricesAndSwap(AMOUNT);
+      await comparePricesAndSwap(amount);
     });
   });
 
@@ -512,7 +362,7 @@ async function listenAndSwap() {
     if (to !== wallet.address) {
       console.log("\nTokens have been swapped inside the pool!");
       queue.add(async () => {
-        await comparePricesAndSwap(AMOUNT);
+        await comparePricesAndSwap(amount);
       });
     }
   });
