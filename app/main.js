@@ -51,6 +51,8 @@ const SwapDirection = {
   USDT: "USDT", // USDC -> USDT
   USDC: "USDC", // USDT -> USDC
 };
+// BigNumber for infinite tokens allowance (we don't have to call approve every time we want to make a transaction)
+const MAXUINT256 = ethers.constants.MaxUint256; 
 
 // Allows to create a queue of promises and resolve them one by one
 class Queue {
@@ -99,8 +101,8 @@ async function getPriceUSDT() {
 async function USDTMoreExpensive() {
   let usdtPrice = await getPriceUSDT();
   let usdcPrice = await getPriceUSDC();
-  console.log("USDT price is: ", formatUnits(usdtPrice.toUnsafeFloat(), 6));
-  console.log("USDC price is: ", formatUnits(usdcPrice.toUnsafeFloat(), 6));
+  console.log("USDT price is: ", formatUnits(usdtPrice.toUnsafeFloat(), 6), " USDC");
+  console.log("USDC price is: ", formatUnits(usdcPrice.toUnsafeFloat(), 6), " USDT");
   if (
     usdtPrice.toUnsafeFloat() >= usdcPrice.toUnsafeFloat()
   ) {
@@ -161,6 +163,28 @@ async function checkBalance(token, amount) {
   }
   return true;
 }
+ 
+// Checks that router has an infinite allowance for USDT and USDC,
+// no need to approve a transaction every time we want to make a swap
+async function checkAllowancesAndApprove() {
+  let usdtAllowance = await USDT.allowance(wallet.address, router.address);
+  let usdcAllowance = await USDC.allowance(wallet.address, router.address);
+
+  if (usdtAllowance != MAXUINT256) {
+      await USDT.approve(router.address, MAXUINT256);
+      console.log("USDT allowance set to infinite");
+  }
+  else {
+      console.log("USDT allowance is OK");
+  }
+  if (usdcAllowance != MAXUINT256) {
+      await USDC.approve(router.address, MAXUINT256);
+      console.log("USDC allowance set to infinite");
+  }
+  else {
+      console.log("USDC allowance is OK");
+  }
+}
 
 // Compares prices of USDC and USDT tokens in the pool and
 // swaps one token for another one
@@ -171,6 +195,7 @@ async function checkBalance(token, amount) {
 // Notice that `amount` has decimals = 6
 async function comparePricesAndSwap(amount) {
   await showWalletBalance();
+  console.log("WALLET BALANCE: ", await provider.getBalance(wallet.address)/1e18, " ETH");
 
   console.log("Comparing prices of tokens...");
 
@@ -193,15 +218,6 @@ async function comparePricesAndSwap(amount) {
         return;
       }
 
-      console.log(`Approving transfer of ${formatUnits(amount, 6)} USDT from the wallet...`);
-      // Approve the transfer of swapped tokens from user to the pool
-      let approveTx = await USDT.connect(wallet).approve(
-        router.address,
-        amount
-      );
-      await approveTx.wait();
-      console.log("Transfer approved!");
-
       // Make a swap
       await swap(USDT.address, USDC.address, amount);
 
@@ -215,15 +231,6 @@ async function comparePricesAndSwap(amount) {
         console.log("User has not enough tokens to swap!");
         return;
       }
-
-      console.log(`Approving transfer of ${formatUnits(balance, 6)} USDT from the wallet...`);
-      // Approve the transfer of swapped tokens from user to the pool
-      let approveTx = await USDT.connect(wallet).approve(
-        router.address,
-        balance
-      );
-      await approveTx.wait();
-      console.log("Transfer approved!");
 
       // Make a swap
       await swap(USDT.address, USDC.address, balance);
@@ -248,15 +255,6 @@ async function comparePricesAndSwap(amount) {
         return;
       }
 
-      console.log(`Approving transfer of ${formatUnits(amount, 6)} USDC from the wallet...`);
-      // Approve the transfer of swapped tokens from user to the pool
-      let approveTx = await USDC.connect(wallet).approve(
-        router.address,
-        amount
-      );
-      await approveTx.wait();
-      console.log("Transfer approved!");
-
       // Make a swap
       await swap(USDC.address, USDT.address, amount);
 
@@ -270,15 +268,6 @@ async function comparePricesAndSwap(amount) {
         console.log("User has not enough tokens to swap!");
         return;
       }
-
-      console.log(`Approving transfer of ${formatUnits(balance, 6)} USDC from the wallet...`);
-      // Approve the transfer of swapped tokens from user to the pool
-      let approveTx = await USDC.connect(wallet).approve(
-        router.address,
-        balance
-      );
-      await approveTx.wait();
-      console.log("Transfer approved!");
 
       // Make a swap
       await swap(USDC.address, USDT.address, balance);
@@ -331,6 +320,10 @@ async function listenAndSwap() {
   console.log("USDT address is ", USDT.address);
   console.log("USDC address is ", USDC.address);
   await showWalletBalance();
+
+  // Check allowances for our stablecoins and approve MAXUINT256 if needed
+  console.log("\nChecking router allowances...")
+  await checkAllowancesAndApprove();
 
   // Check if it's possible to make a swap right now without 
   // waiting for events
