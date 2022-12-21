@@ -4,6 +4,7 @@ const util = require("util");
 const path = require("path");
 require("dotenv").config();
 const delay = require("delay");
+const {calcOptimalSwapAmount} = require("./utils/math"); 
 const { formatEther, parseEther, parseUnits, formatUnits, keccak256 } =
   ethers.utils;
 const { getContractFactory, getContractAt, BigNumber, FixedNumber } = ethers;
@@ -72,7 +73,6 @@ let router;
 let USDT;
 let USDC;
 let queue = new Queue();
-let lastSwapDirection;
 
 // Returns the price of USDC in the pool (pair)
 async function getPriceUSDC() {
@@ -128,11 +128,6 @@ async function swap(from, to, amount) {
     .swapExactTokensForTokens(amount, 1, path, wallet.address, TIMEOUT, {
       gasPrice: newGasPrice,
     });
-  if (to == USDC.address) {
-    lastSwapDirection = SwapDirection.USDC;
-  } else if (to == USDT.address) {
-    lastSwapDirection = SwapDirection.USDT;
-  }
   console.log("Swap finished!");
 }
 
@@ -193,98 +188,61 @@ async function checkAllowancesAndApprove() {
 // If `amount` is zero, then the whole user's balance of USDT and USDC
 // will be swapped each time
 // Notice that `amount` has decimals = 6
-async function comparePricesAndSwap(amount) {
+async function comparePricesAndSwap() {
+  let [usdcAmount, usdtAmount, timestamp] = await pair.getReserves();
+  let amount;
+
   await showWalletBalance();
-  console.log("WALLET BALANCE: ", await provider.getBalance(wallet.address)/1e18, " ETH");
 
   console.log("Comparing prices of tokens...");
-
   // Swap USDT -> USDC if USDT is more expensive
   if (await USDTMoreExpensive()) {
-    console.log("USDT is more expensive");
-    console.log("Trying to swap USDT -> USDC...");
-
-    // If the last swap was USDT -> USDC, there is no need to do another one
-    if (lastSwapDirection == SwapDirection.USDC) {
-      console.log("Last swap was USDT -> USDC already. Cancel the swap!");
-      return;
-    }
-
-    // User wants to swap an exact amount of tokens
-    if (amount != parseUnits(0, 6)) {
-      // Swap is impossible if user has not enough tokens
-      if (!(await checkBalance(USDT, amount))) {
-        console.log("User has not enough tokens to swap!");
-        return;
+      console.log("USDT is more expensive");
+      console.log("Trying to swap USDT -> USDC...");
+      console.log("Calculating optimal swap amount...");
+      try {
+          amount = calcOptimalSwapAmount(usdcAmount, usdtAmount)
+      } catch(e) {
+          console.error(e);
+          return
       }
-
+      console.log("Optimal swap amount is ", formatUnits(amount, 6), " USDT");
+      // Swap everything we got if user has not enough tokens
+      if (!(await checkBalance(USDT, amount))) {
+          console.log("User has not enough tokens for optimal swap, swapping everything we got!");
+          amount = await USDT.balanceOf(wallet.address) 
+      }
       // Make a swap
       await swap(USDT.address, USDC.address, amount);
 
-      // User wants to swap his whole balance of tokens
-    } else {
-      // Amount is the whole balance of the user
-      let balance = await USDT.balanceOf(wallet.address);
-
-      // Swap is impossible if user has not enough tokens
-      if (!(await checkBalance(USDT, balance))) {
-        console.log("User has not enough tokens to swap!");
-        return;
-      }
-
-      // Make a swap
-      await swap(USDT.address, USDC.address, balance);
-    }
-
-    // Swap USDC -> USDT if USDC is more expensive
+  // Swap USDC -> USDT if USDC is more expensive
   } else {
-    console.log("USDC is more expensive");
-    console.log("Trying to swap USDC -> USDT...");
-
-    // If the last swap was USDC -> USDT, there is no need to do another one
-    if (lastSwapDirection == SwapDirection.USDT) {
-      console.log("Last swap was USDC -> USDT already. Cancel the swap!");
-      return;
-    }
-
-    // User wants to swap an exact amount of tokens
-    if (amount != 0) {
+      console.log("USDC is more expensive");
+      console.log("Trying to swap USDC -> USDT...");
+      console.log("Calculating optimal swap amount...");
+      try {
+          amount = calcOptimalSwapAmount(usdtAmount, usdcAmount)
+      } catch(e) {
+          console.error(e);
+          return;
+      }
+      console.log("Optimal swap amount is ", formatUnits(amount, 6), " USDC");
+      // Swap everything we got if user has not enough tokens
       // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDC, amount))) {
-        console.log("User has not enough tokens to swap!");
-        return;
+          console.log("User has not enough tokens for optimal swap, swapping everything we got!");
+          amount = await USDC.balanceOf(wallet.address) 
       }
-
       // Make a swap
       await swap(USDC.address, USDT.address, amount);
-
-      // User wants to swap his whole balance of tokens
-    } else {
-      // Amount is the whole balance of the user
-      let balance = await USDC.balanceOf(wallet.address);
-
-      // Swap is impossible if user has not enough tokens
-      if (!(await checkBalance(USDC, balance))) {
-        console.log("User has not enough tokens to swap!");
-        return;
-      }
-
-      // Make a swap
-      await swap(USDC.address, USDT.address, balance);
-    }
   }
-
   await showWalletBalance();
 }
 
 // Main farming function
 async function listenAndSwap() {
-  //PLACEHOLDER VALUE
-  //TODO: WE NEED TO CALCULATE OPTIMAL AMOUNT FOR A SWAP
-  let amount = parseUnits("1", 6);
   console.log("\n\n\n\n===========\nSTART BOT");
   console.log(`\nCurrent chain is: ${network.name}`);
-  console.log(`Amount to swap is: ${formatUnits(amount, 6)}`);
   console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
   // If the network is not Ultron - get the default provider for the specified network
@@ -328,7 +286,7 @@ async function listenAndSwap() {
   // Check if it's possible to make a swap right now without 
   // waiting for events
   console.log("\nChecking if it's possible to make a swap right now...")
-  await comparePricesAndSwap(amount);
+  await comparePricesAndSwap();
 
   // Listen for events that change pool tokens' prices
   console.log("\nListening for pool events...");
@@ -336,14 +294,14 @@ async function listenAndSwap() {
   pair.on("Mint", () => {
     console.log("\nLiquidity has been added to the pool!");
     queue.add(async () => {
-      await comparePricesAndSwap(amount);
+      await comparePricesAndSwap();
     });
   });
 
   pair.on("Burn", () => {
     console.log("\nLiquidity has been withdrawn from the pool!");
     queue.add(async () => {
-      await comparePricesAndSwap(amount);
+      await comparePricesAndSwap();
     });
   });
 
@@ -355,7 +313,7 @@ async function listenAndSwap() {
     if (to !== wallet.address) {
       console.log("\nTokens have been swapped inside the pool!");
       queue.add(async () => {
-        await comparePricesAndSwap(amount);
+        await comparePricesAndSwap();
       });
     }
   });
