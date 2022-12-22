@@ -111,25 +111,7 @@ async function USDTMoreExpensive() {
 
   return false;
 }
-// Checks if swap threshold was reached
-// Returns true if it was reached
-// Returns false if it was not reached
-async function checkThreshold() {
-  let usdtPrice = await getPriceUSDT();
-  let usdcPrice = await getPriceUSDC();
-  if (
-    // Convert FixedNumber to float to make a comparison
-    // USDT is more expensive
-    usdtPrice.toUnsafeFloat() >=
-      usdcPrice.toUnsafeFloat() ||
-    // USDC is more expensive
-    usdcPrice.toUnsafeFloat() >= usdtPrice.toUnsafeFloat()
-  ) {
-    return true;
-  }
-  return false;
-}
-//
+
 // Makes a swap from one token to another depending on
 // prices of the tokens
 // First token (from) is the more expensive one
