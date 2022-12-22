@@ -41,9 +41,10 @@ const PAIR_ADDRESS = "0x5910306486d3adF0f2ec3146A8C38e6C1F3404b7";
 // The timeout for transactions
 const TIMEOUT = Date.now() + 1000 * 60 * 10;
 // The amount of USDT (USDC) to add as liquidity
-const amountTokenDesired = parseUnits("2", 6);
+const amountTokenDesired = parseUnits("100", 6);
 
 let wallet;
+let swapper;
 let pair;
 let USDT;
 let USDC;
@@ -57,6 +58,7 @@ async function init() {
 
   let wallets = await ethers.getSigners();
   wallet = wallets[0];
+  swapper = wallets[1];
 
   // Initialize the pair contract
   pair = await getContractAt("UniswapV2Pair", PAIR_ADDRESS, wallet);
@@ -76,6 +78,11 @@ async function init() {
   // No need to actually initialize the contract
   ULX_ADDRESS = await router.WETH();
 
+  // Send USDC and USDT tokens to the bot and the swapper
+  await buyToken(USDC, 2500*1e6, ULX_ADDRESS, wallet, router, TIMEOUT);
+  await buyToken(USDT, 2500*1e6, ULX_ADDRESS, wallet, router, TIMEOUT);
+  await buyToken(USDC, 2500*1e6, ULX_ADDRESS, swapper, router, TIMEOUT);
+  await buyToken(USDT, 2500*1e6, ULX_ADDRESS, swapper, router, TIMEOUT);
 }
 
 
@@ -116,13 +123,12 @@ async function showPairBalances(pair, usdc, usdt) {
 async function buyToken(token, amount, ulxAddress, wallet, router, timeout) {
   let path = [ulxAddress, token.address];
   console.log(`\nSwap ULX for ${await token.name()}`);
-  let txResponse = await router.connect(wallet).swapExactETHForTokens(
+  let txResponse = await router.connect(wallet).swapETHForExactTokens(
     amount,
     path,
     wallet.address,
     timeout,
-    // 1 ULX ~= 0.06 USDT in fork
-    { value: parseEther("100") }
+    { value: parseEther("500000") }
   );
   let txReceipt = await txResponse.wait();
   console.log("Swap Finished!");
@@ -243,7 +249,6 @@ async function removeLiquidity(token, usdt, usdc, pair, wallet, router, timeout)
 
 }
 
-
 // Function triggers all events one by one
 async function triggerEvents(wallet, amount, usdt, usdc, pair, ulxAddress, router, timeout) {
   
@@ -252,16 +257,18 @@ async function triggerEvents(wallet, amount, usdt, usdc, pair, ulxAddress, route
   console.log("Amount to swap is: ", formatUnits(amount, 6));
 
   console.log("\n===========");
-  await showUserBalances(wallet, usdc, usdt, pair);
-  await buyToken(usdc, amount, ulxAddress, wallet, router, timeout);
-  await showUserBalances(wallet, usdc, usdt, pair);
-
-  console.log("\n===========");
-  await showUserBalances(wallet, usdc, usdt, pair);
-  await buyToken(usdt, amount, ulxAddress, wallet, router, timeout);
-  await showUserBalances(wallet, usdc, usdt, pair);
-
-  console.log("\n===========");
+  await showUserBalances(swapper, usdc, usdt, pair);
+  await showPairBalances(pair, usdc, usdt);
+  // Decide randomly what to swap
+  if(Math.round(Math.random())) {
+      await swapTokens(usdt, amountTokenDesired, usdc, swapper, router, timeout);
+  } else {
+      await swapTokens(usdc, amountTokenDesired, usdt, swapper, router, timeout);
+  }
+  await showUserBalances(swapper, usdc, usdt, pair);
+  await showPairBalances(pair, usdc, usdt);
+  await delay(5000);
+  /*console.log("\n===========");
   await showUserBalances(wallet, usdc, usdt, pair);
   await showPairBalances(pair, usdc, usdt);
   await addLiquidityWithToken(usdt, amount, usdc, usdt, wallet, router, timeout);
@@ -284,14 +291,16 @@ async function triggerEvents(wallet, amount, usdt, usdc, pair, ulxAddress, route
   await showUserBalances(wallet, usdc, usdt, pair);
   await showPairBalances(pair, usdc, usdt);
   await delay(5000);
-
+*/
 }
 
 async function main() {
   // First, initialize all variables
   await init();
   // Pass initialized variables to the events trigerring function
-  await triggerEvents(wallet, amountTokenDesired, USDT, USDC, pair, ULX_ADDRESS, router, TIMEOUT);
+  for(let i=0; i<50; i++){
+      await triggerEvents(wallet, amountTokenDesired, USDT, USDC, pair, ULX_ADDRESS, router, TIMEOUT);
+  }
 }
 
 if (require.main === module) {

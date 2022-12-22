@@ -26,6 +26,9 @@ module.exports = {
         url: "https://ultron-rpc.net",
         blockNumber: 1805923,
       },
+      accounts: {
+        accountsBalance: "1000000000000000000000000"
+      }
     },
     localhost: {
       url: "http://127.0.0.1:8545",

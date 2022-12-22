@@ -111,12 +111,30 @@ async function USDTMoreExpensive() {
 
   return false;
 }
-
+// Checks if swap threshold was reached
+// Returns true if it was reached
+// Returns false if it was not reached
+async function checkThreshold() {
+  let usdtPrice = await getPriceUSDT();
+  let usdcPrice = await getPriceUSDC();
+  if (
+    // Convert FixedNumber to float to make a comparison
+    // USDT is more expensive
+    usdtPrice.toUnsafeFloat() >=
+      usdcPrice.toUnsafeFloat() ||
+    // USDC is more expensive
+    usdcPrice.toUnsafeFloat() >= usdtPrice.toUnsafeFloat()
+  ) {
+    return true;
+  }
+  return false;
+}
+//
 // Makes a swap from one token to another depending on
 // prices of the tokens
 // First token (from) is the more expensive one
 // Second token (to) is the less expensive one
-async function swap(from, to, amount) {
+async function swap(from, to, amount, expectedAmount) {
   let path = [from, to];
   // Get the current gas price
   let gasPrice = await wallet.getGasPrice();
@@ -191,6 +209,7 @@ async function checkAllowancesAndApprove() {
 async function comparePricesAndSwap() {
   let [usdcAmount, usdtAmount, timestamp] = await pair.getReserves();
   let amount;
+  let expectedAmount;
 
   await showWalletBalance();
 
@@ -201,7 +220,7 @@ async function comparePricesAndSwap() {
       console.log("Trying to swap USDT -> USDC...");
       console.log("Calculating optimal swap amount...");
       try {
-          amount = calcOptimalSwapAmount(usdcAmount, usdtAmount)
+          amount = calcOptimalSwapAmount(usdtAmount)
       } catch(e) {
           console.error(e);
           return
@@ -209,11 +228,21 @@ async function comparePricesAndSwap() {
       console.log("Optimal swap amount is ", formatUnits(amount, 6), " USDT");
       // Swap everything we got if user has not enough tokens
       if (!(await checkBalance(USDT, amount))) {
-          console.log("User has not enough tokens for optimal swap, swapping everything we got!");
+          console.log("Not enough tokens for optimal swap, swapping everything we got!");
           amount = await USDT.balanceOf(wallet.address) 
       }
+      if(amount == 0) {
+          console.log("Out of USDT tokens, cancelling the swap!");
+          return;
+      }
+      expectedAmount = await router.getAmountOut(amount, usdtAmount, usdcAmount);
+      if(expectedAmount < amount) {
+          console.log("Not profitable swap, reverting...");
+          return;
+      }
+      console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
       // Make a swap
-      await swap(USDT.address, USDC.address, amount);
+      await swap(USDT.address, USDC.address, amount, expectedAmount);
 
   // Swap USDC -> USDT if USDC is more expensive
   } else {
@@ -221,20 +250,29 @@ async function comparePricesAndSwap() {
       console.log("Trying to swap USDC -> USDT...");
       console.log("Calculating optimal swap amount...");
       try {
-          amount = calcOptimalSwapAmount(usdtAmount, usdcAmount)
+          amount = calcOptimalSwapAmount(usdcAmount)
       } catch(e) {
           console.error(e);
           return;
       }
       console.log("Optimal swap amount is ", formatUnits(amount, 6), " USDC");
       // Swap everything we got if user has not enough tokens
-      // Swap is impossible if user has not enough tokens
       if (!(await checkBalance(USDC, amount))) {
-          console.log("User has not enough tokens for optimal swap, swapping everything we got!");
+          console.log("Not enough tokens for optimal swap, swapping everything we got!");
           amount = await USDC.balanceOf(wallet.address) 
       }
+      if(amount == 0) {
+          console.log("Out of USDC tokens, cancelling the swap!");
+          return;
+      }
+      expectedAmount = await router.getAmountOut(amount, usdcAmount, usdtAmount);
+      if(expectedAmount < amount) {
+          console.log("Not profitable swap, reverting...");
+          return;
+      }
+      console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
       // Make a swap
-      await swap(USDC.address, USDT.address, amount);
+      await swap(USDC.address, USDT.address, amount, expectedAmount);
   }
   await showWalletBalance();
 }
