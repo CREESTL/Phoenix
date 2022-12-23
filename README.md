@@ -28,18 +28,6 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
   ```
   ACC_PRIVATE_KEY=***your private key***
   ```
-- Input a swap threshold (see [Bot Logic](#logic)) to the `.env` file
-  ```
-  SWAP_THRESHOLD=***swap threshold***
-  ```
-- Input a swap amount (see [Bot Logic](#logic)) to the `.env` file
-  ```
-  AMOUNT=***amount***
-  ```
-- Input a maximum price change (in %) (see [Bot Logic](#logic)) to the `.env` file
-  ```
-  MAX_PRICE_CHANGE=***maximum price change***
-  ```
 - Input a gas price multiplier (see [Bot Logic](#logic)) to the `.env` file
 
   ```
@@ -134,16 +122,6 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 
 #### Terms
 
-- `Swap threshold` - the ratio of tokens' prices enough to initialize the swap. (e.g. set swap threshold to `1.5` if you want the swap to happen when USDC is 1.5 times more expensive than USDT of vice versa)
-  - If no value is provided, the default value of `1.5` is used
-- `Swap amount` - the amount of tokens (USDT or USDC depending on the tokens' prices ratio) to swap
-  - If swap amount is 0 then _all user's tokens will be swapped_. So between the swaps a user will have his whole balance consisting of either USDT or USDC (**only** if user's balance is less than the _optimal amount_)
-  - If swap amount is _not_ 0 then exactly the provided amount of tokens will be swapped
-  - Swap amount _can not_ be a negative integer
-- `Max price change` - how much can a price of deposited token change after the deposit (_in percents_)
-  - If the expected price of the token changes for more than [max price change %], the swap would be cancelled
-  - Max price change _should_ be a positive integer
-  - If no value is provided, the default value of `1%` is used
 - `Gas price multiplier` - how many times to increase the default gas price
   - The higher the multiplier, the higher the gas price of the transaction, the faster the transaction gets mined and included into the block
   - Multiplier _should_ be a positive integer
@@ -153,100 +131,57 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 
 **Scenario №1 (Normal):**
 
-- Swap threshold = 1.5; Swap amount = **4**; Max price change = 0.1
 - Users initial balances:
   - USDC: 100
   - USDT: 0
-- Bot hears the "**Mint**" event in the pool. That means that someone has provided liquidity into the pool, changing tokens' prices
+- Bot hears the "**Swap**" event in the pool. That means that someone has swapped some tokens in the pool, changing tokens prices
 - Bot compares USDC and USDT prices
   - **USDC** turns out to have a higher price
-- Bot checks that USDC price is at least 1.5 \* USDT price
-  - The result is positive. Price difference is not 1.5 but even 2
-- Bot checks if swapping 4 USDC to 4 \* 2 = 8 USDT will change USDC price for more than 0.1%
-  - The result is negative (price will not change that much)
-- Bot swaps **4** USDC for 8 USDT
+- Bot calculates maximum USDC amount X1 that has price impact no more than 0.05%
+- Bot checks if swapping X1 USDC is profitable (we receive **Y1>X1** amount of USDT tokens)
+- Bot swaps X1 USDC for Y1 USDT
 - User's balances:
-  - USDC: 96
-  - USDT: 8
-- Bot hears the "**Mint**" event in the pool once again.
+  - USDC: 100 - X1
+  - USDT: Y1
+- Bot hears the "**Swap**" event in the pool once again.
 - Bot compares USDC and USDT prices
   - USDC turns out to have a higher price
-- Bot **does not** swap USDC to USDT because now it _only makes sence to swap back: USDT to USDC_
+- Bot **repeats** operation above and swaps X2 USDX tokens for Y2 USDT, where **Y2>X2**
 - User's balances:
-  - USDC: 96
-  - USDT: 8
-- Bot hears the "**Mint**" event in the pool once again.
+  - USDC: 100 - X1 - X2
+  - USDT: Y1 + Y2
+- Bot hears the "**Swap**" event in the pool once again.
 - Bot compares USDC and USDT prices
   - **USDT** turns out to have a higher price
-- Bot checks that USDT price is at least 1.5 \* USDC price
-  - The result is positive. Price difference is not 1.5 but even 2
-- Bot checks if swapping 4 USDT to 4 \* 2 = 8 USDC will change USDT price for more than 0.1%
-  - The result is negative (price will not change that much)
-- Bot swaps **4** USDT for 8 USDC
+- Bot calculates maximum USDT amount Y3 that has price impact no more than 0.05%
+- Bot checks if swapping Y3 USDT is profitable (we receive **X3>Y3** amount of USDC tokens)
+- Bot swaps Y3 USDT for X3 USDC
 - User's balances:
-  - USDC: 106
-  - USDT: 4
+  - USDC: 100 - X1 - X2 + X3
+  - USDT: Y1 + Y2 - Y3
 
 and so on...
 
-**Scenario №2 (No amount provided):**
+**Scenario №2 (User doesn't have enought tokens to swap optimal amount):**
 
-- Swap threshold = 1.5; Swap amount = **0**; Max price change = 0.1
 - User's initial balances:
   - USDC: 100
   - USDT: 0
-- Bot hears the "**Mint**" event in the pool. That means that someone has provided liquidity into the pool, changing tokens' prices
+- Bot hears the "**Swap**" event in the pool. That means that someone has swapped some tokens in the pool, changing tokens prices
 - Bot compares USDC and USDT prices
   - **USDC** turns out to have a higher price
-- Bot checks that USDC price is at least 1.5 \* USDT price
-  - The result is positive. Price difference is not 1.5 but even 2
-- Bot detects that the user **did not provide** any amount to swap
-  - In that case bot uses _the whole user's balance_ as the swap amount.
-- Bot checks if swapping **100** USDC to 100 \* 2 = 200 USDT will change USDC price for more than 0.1%
-  - The result is positive (price **will** change that much)
-- That means that the swap using 100 USDC gets cancelled
-- Bot now **calculates the maximum amount** of USDC that after being deposited into the pool will not change USDC price for more than 0.1%
-  - This amount is 26
-  - This is a "greedy" algorithm
-- Bot swaps **26** USDC for 26 \* 2 = 52 USDT
+- Bot calculates maximum USDC amount X1 that has price impact no more than 0.05%
+- Bot detects that the user **did not have** X1 amount to swap
+  - In that case bot uses _the whole user's balance_  X2 = 100 as the swap amount.
+- Bot checks if swapping X2 USDC is profitable (we receive **Y1>X2** amount of USDT tokens)
+- Bot swaps X2 USDC for Y1 USDT
 - User's balances:
-  - USDC: 74
-  - USDT: 52
-- Bot hears the "**Mint**" event in the pool once again.
-- Bot compares USDC and USDT prices
-  - **USDC** turns out to have a higher price
-- Bot **does not** swap USDC to USDT because now it _only makes sence to swap back: USDT to USDC_
-- User's balances:
-  - USDC: 74
-  - USDT: 52
-- Bot hears the "**Mint**" event in the pool once again
-- Bot compares USDC and USDT prices
-  - **USDT** turns out to have a higher price
-- Bot checks that USDT price is at least 1.5 \* USDC price
-  - The result is positive. Price difference is not 1.5 but even 2
-- Bot detects that the user **did not provide** any amount to swap
-  - In that case bot uses _the whole user's balance_ as the swap amount.
-- Bot checks if swapping 52 USDT to 54 \* 2 = 108 USDC will change USDT price for more than 0.1%
-  - The result is positive (price **will** change that much)
-- That means that the swap using 54 USDT gets cancelled
-- Bot now **calculates the maximum amount** of USDT that after being deposited into the pool will not change price for more than 0.1%
-  - This amount is 14
-- Bot swaps **14** USDT for 14 \* 2 = 28 USDC
-- User's balances:
-  - USDC: 102
-  - USDT: 38
-
-and so on...
-
+  - USDC: 0
+  - USDT: Y1
+- After that we wait unitl USDT > USDC
 ---
 
-In the Scenario №1 if the amount to swap was much higher (e.g. 5 000 000), that would mean that each swap would have been cancelled because swapping such a high amount of USDC would have changed USDC price dramatically. In that case **no optimal amount** gets calculated by the bot in that case. The user is suggested to either provide a lower amount, or to not provide any amount at all. The **optimal amount** gets calculated **only** if the user did not provide the amount himself.
-
-In the Scenario №2 if after checking USDC price change after the deposit the result was negative (the price will not change that much) the bot would have used a whole user's balance for the swap and the following steps would have been the same as in the Scenario №1. No optimal amount of tokens would have been calculated.
-
-In all above examples "**Mint**" event could be replaced with "**Swap**" or "**Burn**" events. The all token's price inside the pool.
-
-In all above examples if the price difference of tokens was less than 1.5, the swap would have been cancelled.
+In all above examples "**Swap**" event could be replaced with "**Mint**" or "**Burn**" events. The all token's price inside the pool.
 
 All logs produced by the bot are saved into `log.txt` file. File gets rewritten each time the bot start working.  
 

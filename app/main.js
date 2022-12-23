@@ -125,9 +125,14 @@ async function swap(from, to, amount, expectedAmount) {
   console.log(`Swapping ${formatUnits(amount, 6)} tokens...`);
   await router
     .connect(wallet)
-    .swapExactTokensForTokens(amount, 1, path, wallet.address, TIMEOUT, {
-      gasPrice: newGasPrice,
-    });
+    .swapExactTokensForTokens(
+      amount,
+      amount, //frontrun safe, use 1 to disable
+      path,
+      wallet.address,
+      TIMEOUT,
+      {gasPrice: newGasPrice},
+    );
   console.log("Swap finished!");
 }
 
