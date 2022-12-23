@@ -170,14 +170,14 @@ async function checkAllowancesAndApprove() {
   let usdtAllowance = await USDT.allowance(wallet.address, router.address);
   let usdcAllowance = await USDC.allowance(wallet.address, router.address);
 
-  if (usdtAllowance != MAXUINT256) {
+  if (!usdtAllowance.eq(MAXUINT256)) {
       await USDT.approve(router.address, MAXUINT256);
       console.log("USDT allowance set to infinite");
   }
   else {
       console.log("USDT allowance is OK");
   }
-  if (usdcAllowance != MAXUINT256) {
+  if (!usdcAllowance.eq(MAXUINT256)) {
       await USDC.approve(router.address, MAXUINT256);
       console.log("USDC allowance set to infinite");
   }
