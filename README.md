@@ -34,6 +34,10 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
   GAS_MULTIPLIER=***gas price multiplier***
   ```
 
+- Input a minimal profit that you would like to receive in %, **MUST BE > 100%** to filter non-profitable swaps
+  ```
+  PROFIT_RATIO=***profit %***
+  ```
   :warning:**DO NOT SHARE YOUR .env FILE IN ANY WAY OR YOU RISK TO LOSE ALL YOUR FUNDS**:warning:
 
 #### Run

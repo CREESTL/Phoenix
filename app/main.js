@@ -26,6 +26,8 @@ console.log = function() {
 
 // The private key of the user
 const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
+// The relation between tokens spent and tokens received for a swap, %
+const PROFIT_RATIO = process.env.PROFIT_RATIO;
 // How many times to increment the "market" gas price to mine the transaction faster
 // If no value is provided, x2 is set as default
 const GAS_MULTIPLIER = process.env.GAS_MULTIPLIER || 2;
@@ -133,7 +135,6 @@ async function swap(from, to, amount, expectedAmount) {
       TIMEOUT,
       {gasPrice: newGasPrice},
     );
-  console.log("Swap finished!");
 }
 
 // Shows USDT and USDC balances of the user
@@ -223,13 +224,18 @@ async function comparePricesAndSwap() {
           return;
       }
       expectedAmount = await router.getAmountOut(amount, usdtAmount, usdcAmount);
-      if(expectedAmount < amount) {
+      if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
           console.log("Not profitable swap, reverting...");
           return;
       }
       console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
       // Make a swap
+      let balanceBefore = await USDC.balanceOf(wallet.address);
+      balanceBefore = formatUnits(balanceBefore, 6);
       await swap(USDT.address, USDC.address, amount, expectedAmount);
+      let balanceAfter = await USDC.balanceOf(wallet.address);
+      balanceAfter = formatUnits(balanceAfter, 6);
+      console.log(`Swap finished with ${(balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6)} % profit`); 
 
   // Swap USDC -> USDT if USDC is more expensive
   } else {
@@ -253,13 +259,18 @@ async function comparePricesAndSwap() {
           return;
       }
       expectedAmount = await router.getAmountOut(amount, usdcAmount, usdtAmount);
-      if(expectedAmount < amount) {
+      if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
           console.log("Not profitable swap, reverting...");
           return;
       }
       console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
       // Make a swap
+      let balanceBefore = await USDT.balanceOf(wallet.address);
+      balanceBefore = formatUnits(balanceBefore, 6);
       await swap(USDC.address, USDT.address, amount, expectedAmount);
+      let balanceAfter = await USDT.balanceOf(wallet.address);
+      balanceAfter = formatUnits(balanceAfter, 6);
+      console.log(`Swap finished with ${(balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6)} % profit`); 
   }
   await showWalletBalance();
 }
@@ -268,6 +279,7 @@ async function comparePricesAndSwap() {
 async function listenAndSwap() {
   console.log("\n\n\n\n===========\nSTART BOT");
   console.log(`\nCurrent chain is: ${network.name}`);
+  console.log(`\nMinimal profit for a swap: ${PROFIT_RATIO} %`);
   console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
   // If the network is not Ultron - get the default provider for the specified network
