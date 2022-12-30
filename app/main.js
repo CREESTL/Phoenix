@@ -236,6 +236,7 @@ async function comparePricesAndSwap() {
       let balanceAfter = await USDC.balanceOf(wallet.address);
       balanceAfter = formatUnits(balanceAfter, 6);
       console.log(`Swap finished with ${(balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6)} % profit`); 
+      console.log(`+ ${balanceAfter - balanceBefore - formatUnits(amount, 6)} USDC`);
 
   // Swap USDC -> USDT if USDC is more expensive
   } else {
@@ -271,6 +272,7 @@ async function comparePricesAndSwap() {
       let balanceAfter = await USDT.balanceOf(wallet.address);
       balanceAfter = formatUnits(balanceAfter, 6);
       console.log(`Swap finished with ${(balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6)} % profit`); 
+      console.log(`+ ${(balanceAfter - balanceBefore) - formatUnits(amount, 6)} USDT`);
   }
   await showWalletBalance();
 }
