@@ -8,6 +8,16 @@ const getDecimalCount = (x, y) => {
     let max = Math.max(x, y);
     return max.toString().length
 }
+// returns number of decimals after decimal part in fixed point number
+exports.getDecimalsAfterPoint = (x) => {
+    console.log(x)
+    let value = Math.abs(x);
+    let s = value.toString().split('.')
+    console.log(s)
+    if(s.length == 1)
+      return 0;
+    return s[1].length;
+}
 
 // calculate optimal tradeable amount for the given token
 exports.calcOptimalSwapAmount = (reserve) => {

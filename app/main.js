@@ -4,7 +4,7 @@ const util = require("util");
 const path = require("path");
 require("dotenv").config();
 const delay = require("delay");
-const {calcOptimalSwapAmount} = require("./utils/math"); 
+const {calcOptimalSwapAmount, getDecimalsAfterPoint} = require("./utils/math"); 
 const { formatEther, parseEther, parseUnits, formatUnits, keccak256 } =
   ethers.utils;
 const { getContractFactory, getContractAt, BigNumber, FixedNumber } = ethers;
@@ -123,7 +123,9 @@ async function swap(from, to, amount, expectedAmount) {
   // Get the current gas price
   let gasPrice = await wallet.getGasPrice();
   // Multiply current gas price for the provided multyplier amount
-  let newGasPrice = gasPrice.mul(GAS_MULTIPLIER);
+  let length = getDecimalsAfterPoint(GAS_MULTIPLIER);
+  let newGasPrice = GAS_MULTIPLIER * 10**length;
+  newGasPrice = gasPrice.mul(newGasPrice).div(10**length);
   console.log(`Swapping ${formatUnits(amount, 6)} tokens...`);
   await router
     .connect(wallet)
@@ -226,6 +228,7 @@ async function comparePricesAndSwap() {
       expectedAmount = await router.getAmountOut(amount, usdtAmount, usdcAmount);
       if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
           console.log("Not profitable swap, reverting...");
+          console.log("\nListening for pool events...");
           return;
       }
       console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
@@ -235,8 +238,10 @@ async function comparePricesAndSwap() {
       await swap(USDT.address, USDC.address, amount, expectedAmount);
       let balanceAfter = await USDC.balanceOf(wallet.address);
       balanceAfter = formatUnits(balanceAfter, 6);
-      console.log(`Swap finished with ${(balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6)} % profit`); 
-      console.log(`+ ${balanceAfter - balanceBefore - formatUnits(amount, 6)} USDC`);
+      let profitRatio = (balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6) - 100;
+      let profit = (balanceAfter - balanceBefore) - formatUnits(amount, 6)
+      console.log(`\nSwap finished with ${(Math.floor(profitRatio * 1000) / 1000)} % profit`); 
+      console.log(`+ ${Math.floor(profit * 1000) / 1000} USDC\n`);
 
   // Swap USDC -> USDT if USDC is more expensive
   } else {
@@ -262,6 +267,7 @@ async function comparePricesAndSwap() {
       expectedAmount = await router.getAmountOut(amount, usdcAmount, usdtAmount);
       if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
           console.log("Not profitable swap, reverting...");
+          console.log("\nListening for pool events...");
           return;
       }
       console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
@@ -271,8 +277,10 @@ async function comparePricesAndSwap() {
       await swap(USDC.address, USDT.address, amount, expectedAmount);
       let balanceAfter = await USDT.balanceOf(wallet.address);
       balanceAfter = formatUnits(balanceAfter, 6);
-      console.log(`Swap finished with ${(balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6)} % profit`); 
-      console.log(`+ ${(balanceAfter - balanceBefore) - formatUnits(amount, 6)} USDT`);
+      let profitRatio = (balanceAfter - balanceBefore) * 100 / formatUnits(amount, 6) - 100;
+      let profit = (balanceAfter - balanceBefore) - formatUnits(amount, 6)
+      console.log(`\nSwap finished with ${(Math.floor(profitRatio * 1000) / 1000)} % profit`); 
+      console.log(`+ ${Math.floor(profit * 1000) / 1000} USDT\n`);
   }
   await showWalletBalance();
 }
