@@ -210,7 +210,7 @@ async function comparePricesAndSwap() {
       console.log("Trying to swap USDT -> USDC...");
       console.log("Calculating optimal swap amount...");
       try {
-          amount = calcOptimalSwapAmount(usdtAmount)
+          amount = calcOptimalSwapAmount(usdtAmount, usdcAmount)
       } catch(e) {
           console.error(e);
           return
@@ -228,7 +228,6 @@ async function comparePricesAndSwap() {
       expectedAmount = await router.getAmountOut(amount, usdtAmount, usdcAmount);
       if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
           console.log("Not profitable swap, reverting...");
-          console.log("\nListening for pool events...");
           return;
       }
       console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
@@ -249,7 +248,7 @@ async function comparePricesAndSwap() {
       console.log("Trying to swap USDC -> USDT...");
       console.log("Calculating optimal swap amount...");
       try {
-          amount = calcOptimalSwapAmount(usdcAmount)
+          amount = calcOptimalSwapAmount(usdcAmount, usdtAmount)
       } catch(e) {
           console.error(e);
           return;
@@ -267,7 +266,6 @@ async function comparePricesAndSwap() {
       expectedAmount = await router.getAmountOut(amount, usdcAmount, usdtAmount);
       if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
           console.log("Not profitable swap, reverting...");
-          console.log("\nListening for pool events...");
           return;
       }
       console.log(`Expecting ${formatUnits(expectedAmount, 6)} tokens...`);
