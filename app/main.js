@@ -26,8 +26,10 @@ console.log = function() {
 
 // The private key of the user
 const ACC_PRIVATE_KEY = process.env.ACC_PRIVATE_KEY;
-// The relation between tokens spent and tokens received for a swap, %
-const PROFIT_RATIO = process.env.PROFIT_RATIO;
+// The relation between USDC tokens spent and USDT tokens received for a swap, %
+const PROFIT_RATIO_USDC_USDT = process.env.PROFIT_RATIO_USDC_USDT;
+// The relation between USDT tokens spent and USDC tokens received for a swap, %
+const PROFIT_RATIO_USDT_USDC = process.env.PROFIT_RATIO_USDT_USDC;
 // How many times to increment the "market" gas price to mine the transaction faster
 // If no value is provided, x2 is set as default
 const GAS_MULTIPLIER = process.env.GAS_MULTIPLIER || 2;
@@ -226,7 +228,7 @@ async function comparePricesAndSwap() {
           return;
       }
       expectedAmount = await router.getAmountOut(amount, usdtAmount, usdcAmount);
-      if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
+      if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO_USDT_USDC) {
           console.log("Not profitable swap, reverting...");
           return;
       }
@@ -264,7 +266,7 @@ async function comparePricesAndSwap() {
           return;
       }
       expectedAmount = await router.getAmountOut(amount, usdcAmount, usdtAmount);
-      if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO) {
+      if(formatUnits(expectedAmount, 6) * 100 / formatUnits(amount, 6) < PROFIT_RATIO_USDC_USDT) {
           console.log("Not profitable swap, reverting...");
           return;
       }
@@ -287,7 +289,8 @@ async function comparePricesAndSwap() {
 async function listenAndSwap() {
   console.log("\n\n\n\n===========\nSTART BOT");
   console.log(`\nCurrent chain is: ${network.name}`);
-  console.log(`\nMinimal profit for a swap: ${PROFIT_RATIO} %`);
+  console.log(`\nMinimal profit for a USDC -> USDT swap: ${PROFIT_RATIO_USDC_USDT} %`);
+  console.log(`Minimal profit for a USDT -> USDC swap: ${PROFIT_RATIO_USDT_USDC} %`);
   console.log(`Gas price multiplier is: ${GAS_MULTIPLIER}`);
 
   // If the network is not Ultron - get the default provider for the specified network

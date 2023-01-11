@@ -36,7 +36,8 @@ Phoenix is a bot for automated swaps in USDT/USDC pool on Ultron Network
 
 - Input a minimal profit that you would like to receive in %, **MUST BE > 100%** to filter non-profitable swaps
   ```
-  PROFIT_RATIO=***profit %***
+  PROFIT_RATIO_USDC_USDT=***profit %***
+  PROFIT_RATIO_USDT_USDC=***profit %***
   ```
   :warning:**DO NOT SHARE YOUR .env FILE IN ANY WAY OR YOU RISK TO LOSE ALL YOUR FUNDS**:warning:
 
@@ -141,7 +142,7 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 - Bot hears the "**Swap**" event in the pool. That means that someone has swapped some tokens in the pool, changing tokens prices
 - Bot compares USDC and USDT prices
   - **USDC** turns out to have a higher price
-- Bot calculates maximum USDC amount X1 that has price impact no more than 0.05%
+- Bot calculates optimal USDC amount X1
 - Bot checks if swapping X1 USDC is profitable (we receive **Y1>X1** amount of USDT tokens)
 - Bot swaps X1 USDC for Y1 USDT
 - User's balances:
@@ -157,7 +158,7 @@ Wallet's address and private key should be pasted into the `.env` file (see [Pre
 - Bot hears the "**Swap**" event in the pool once again.
 - Bot compares USDC and USDT prices
   - **USDT** turns out to have a higher price
-- Bot calculates maximum USDT amount Y3 that has price impact no more than 0.05%
+- Bot calculates optimal USDT amount Y3 
 - Bot checks if swapping Y3 USDT is profitable (we receive **X3>Y3** amount of USDC tokens)
 - Bot swaps Y3 USDT for X3 USDC
 - User's balances:
@@ -174,7 +175,7 @@ and so on...
 - Bot hears the "**Swap**" event in the pool. That means that someone has swapped some tokens in the pool, changing tokens prices
 - Bot compares USDC and USDT prices
   - **USDC** turns out to have a higher price
-- Bot calculates maximum USDC amount X1 that has price impact no more than 0.05%
+- Bot calculates optimal USDC amount X1 
 - Bot detects that the user **did not have** X1 amount to swap
   - In that case bot uses _the whole user's balance_  X2 = 100 as the swap amount.
 - Bot checks if swapping X2 USDC is profitable (we receive **Y1>X2** amount of USDT tokens)
