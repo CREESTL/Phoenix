@@ -1,14 +1,9 @@
+const FEE = 0.997;
+
 // returns number of decimals of the biggest number
 const getDecimalCount = (x, y) => {
     let max = Math.max(x, y);
     return max.toString().length
-}
-// calculates quadratic equation
-const calcQuadraticEquation = (a, b, c) => {
-    let D = b*b - 4*a*c;
-    let root1 = (b*(-1) - Math.sqrt(D))/2*a;
-    let root2 = (b*(-1) + Math.sqrt(D))/2*a;
-    return Math.max(root1, root2);
 }
 // returns number of decimals after decimal part in fixed point number
 exports.getDecimalsAfterPoint = (x) => {
@@ -22,7 +17,9 @@ exports.getDecimalsAfterPoint = (x) => {
 exports.calcOptimalSwapAmount = (reserve0, reserve1) => {
     let r0 = reserve0 / 1e6;
     let r1 = reserve1 / 1e6;
-    let optimalAmount = calcQuadraticEquation(1, 2*r0, r0*r0 - r0*r1);
+    let root1 = (Math.sqrt(FEE*r0*r1) - r0)/FEE;
+    let root2 = (Math.sqrt(FEE*r0*r1)*(-1) - r0)/FEE;
+    let optimalAmount =  Math.max(root1, root2);
     return Math.floor(optimalAmount * 1e6);
 }
 
