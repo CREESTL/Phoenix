@@ -20,6 +20,8 @@ exports.calcOptimalSwapAmount = (reserve0, reserve1) => {
     let root1 = (Math.sqrt(FEE*r0*r1) - r0)/FEE;
     let root2 = (Math.sqrt(FEE*r0*r1)*(-1) - r0)/FEE;
     let optimalAmount =  Math.max(root1, root2);
+    if(optimalAmount < 0)
+        throw "error";
     return Math.floor(optimalAmount * 1e6);
 }
 

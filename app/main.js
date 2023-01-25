@@ -214,7 +214,7 @@ async function comparePricesAndSwap() {
       try {
           amount = calcOptimalSwapAmount(usdtAmount, usdcAmount)
       } catch(e) {
-          console.error(e);
+          console.log("Unable to calculate optimal amount, pool difference too low... reverting");
           return
       }
       console.log("Optimal swap amount is ", formatUnits(amount, 6), " USDT");
@@ -252,7 +252,7 @@ async function comparePricesAndSwap() {
       try {
           amount = calcOptimalSwapAmount(usdcAmount, usdtAmount)
       } catch(e) {
-          console.error(e);
+          console.log("Unable to calculate optimal amount, pool difference too low... reverting");
           return;
       }
       console.log("Optimal swap amount is ", formatUnits(amount, 6), " USDC");
